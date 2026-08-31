@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Gymletics">
+  <rect width="512" height="512" rx="112" fill="#080808"/>
+  <path d="M98 278h72v-44H98v44Zm244 0h72v-44h-72v44ZM184 310h144V202H184v108Zm-30-52h28m148 0h28" fill="none" stroke="#fff" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="m182 166 74-66 74 66" fill="none" stroke="#fff" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="256" y="416" text-anchor="middle" fill="#fff" font-family="Arial, sans-serif" font-size="72" font-weight="900" letter-spacing="8">GYM</text>
+</svg>
