@@ -2,18 +2,30 @@ import type { Metadata, Viewport } from 'next';
 
 import './globals.css';
 
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? '';
+const siteOrigin =
+  process.env.NEXT_PUBLIC_SITE_ORIGIN ?? 'https://gymletics-daniel.daniel-ml.chatgpt.site';
+const publicAsset = (path: string) => `${basePath}${path}`;
+const siteUrl = new URL(`${basePath}/`, siteOrigin);
+const socialImage = new URL(publicAsset('/og.png'), siteOrigin);
+
 export const metadata: Metadata = {
   title: 'Gymletics — Tu progreso, serie a serie',
   description: 'Planes, entrenamientos y progreso del gimnasio en una sola aplicación.',
   applicationName: 'Gymletics',
-  manifest: '/manifest.webmanifest',
+  metadataBase: new URL(siteOrigin),
+  alternates: {
+    canonical: siteUrl,
+  },
+  manifest: publicAsset('/manifest.webmanifest'),
   openGraph: {
     type: 'website',
+    url: siteUrl,
     title: 'Gymletics — Tu progreso, serie a serie',
     description: 'Planes, entrenamientos y progreso del gimnasio en una sola aplicación.',
     images: [
       {
-        url: '/og.png',
+        url: socialImage,
         width: 1200,
         height: 630,
         alt: 'Gymletics — Tu progreso, serie a serie',
@@ -24,11 +36,11 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Gymletics — Tu progreso, serie a serie',
     description: 'Planes, entrenamientos y progreso del gimnasio en una sola aplicación.',
-    images: ['/og.png'],
+    images: [socialImage.toString()],
   },
   icons: {
-    icon: '/icon.svg',
-    apple: '/apple-touch-icon.png',
+    icon: publicAsset('/icon.svg'),
+    apple: publicAsset('/apple-touch-icon.png'),
   },
   appleWebApp: {
     capable: true,

@@ -1,5 +1,7 @@
-const CACHE = 'gymletics-shell-v1';
-const SHELL = ['/', '/manifest.webmanifest', '/icon.svg'];
+const CACHE = 'gymletics-shell-v2';
+const SCOPE_ROOT = new URL('./', self.registration.scope).pathname;
+const scopedPath = (path) => new URL(path, self.registration.scope).pathname;
+const SHELL = [SCOPE_ROOT, scopedPath('manifest.webmanifest'), scopedPath('icon.svg')];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)));
@@ -20,10 +22,10 @@ self.addEventListener('fetch', (event) => {
       fetch(event.request)
         .then((response) => {
           const copy = response.clone();
-          caches.open(CACHE).then((cache) => cache.put('/', copy));
+          caches.open(CACHE).then((cache) => cache.put(SCOPE_ROOT, copy));
           return response;
         })
-        .catch(() => caches.match('/')),
+        .catch(() => caches.match(SCOPE_ROOT)),
     );
     return;
   }
