@@ -1,5 +1,6 @@
 import { uid } from './defaults';
 import type { GymleticsData, SetLog, WeightUnit, WorkoutSession } from './types';
+import { formatWeight } from './weight-format';
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -110,7 +111,7 @@ export async function exportPdf(data: GymleticsData) {
   document.text(`Sesiones completadas: ${completed.length}`, 16, y);
   document.text(`Minutos de cardio: ${completed.reduce((sum, session) => sum + session.cardioMinutes, 0)}`, 16, y + 6);
   document.text(`Planes guardados: ${data.plans.length}`, 16, y + 12);
-  if (latestBody) document.text(`Última medición: ${latestBody.weight} kg · grasa ${latestBody.fatPercent}% · músculo ${latestBody.musclePercent}%`, 16, y + 18);
+  if (latestBody) document.text(`Última medición: ${formatWeight(latestBody.weight)} kg · grasa ${latestBody.fatPercent}% · músculo ${latestBody.musclePercent}%`, 16, y + 18);
   y += 32;
   document.setFont('helvetica', 'bold');
   document.setFontSize(14);

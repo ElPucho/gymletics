@@ -5,6 +5,7 @@ import type {
   PlanExercise,
   WorkoutSession,
 } from './types';
+import { formatWeight } from './weight-format';
 
 function workingSets(log: ExerciseLog) {
   return log.sets.filter((set) => set.type === 'work');
@@ -92,8 +93,8 @@ export function recommendWeight(
       weight: roundWeight(lastWeight + exercise.increment),
       action: 'increase',
       reason: exercise.technique === 'rest-pause'
-        ? `Dos sesiones seguidas con el objetivo completo y rest-pause 5+5. Sube ${exercise.increment} ${exercise.unit}.`
-        : `Dos sesiones seguidas con todas las series objetivo. Sube ${exercise.increment} ${exercise.unit}.`,
+        ? `Dos sesiones seguidas con el objetivo completo y rest-pause 5+5. Sube ${formatWeight(exercise.increment)} ${exercise.unit}.`
+        : `Dos sesiones seguidas con todas las series objetivo. Sube ${formatWeight(exercise.increment)} ${exercise.unit}.`,
       lastSession: last.session,
     };
   }

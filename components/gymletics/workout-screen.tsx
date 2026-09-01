@@ -9,16 +9,11 @@ import {
   CheckCircle2,
   ChevronRight,
   Circle,
-  Clock3,
-  Dumbbell,
   Flame,
-  Gauge,
   Pause,
   Play,
-  RotateCcw,
   SkipForward,
   Sparkles,
-  TimerReset,
   Trash2,
   Trophy,
 } from 'lucide-react';
@@ -28,54 +23,19 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Progress, ProgressLabel, ProgressValue } from '@/components/ui/progress';
+import { DecimalWeightInput } from './decimal-weight-input';
 import { ScreenHeader } from './shared';
 import { uid } from '@/lib/gymletics/defaults';
-import { recommendWeight, roundWeight } from '@/lib/gymletics/progression';
+import { recommendWeight } from '@/lib/gymletics/progression';
+import { buildExerciseLog } from '@/lib/gymletics/session-builder';
+import { formatWeight } from '@/lib/gymletics/weight-format';
 import type {
-  ExerciseLog,
   GymleticsData,
-  PlanExercise,
   RoutineDay,
   SetLog,
   WorkoutPlan,
   WorkoutSession,
 } from '@/lib/gymletics/types';
-
-function makeExerciseLog(
-  data: GymleticsData,
-  plan: WorkoutPlan,
-  day: RoutineDay,
-  exercise: PlanExercise,
-): ExerciseLog {
-  const recommendation = recommendWeight(data, plan.id, day.id, exercise);
-  const warmups: SetLog[] = Array.from({ length: exercise.warmupSets }, (_, index) => ({
-    id: uid('set'),
-    index,
-    type: 'warmup',
-    weight: roundWeight(recommendation.weight * (0.45 + index * 0.15)),
-    reps: 20,
-    completed: false,
-  }));
-  const sets: SetLog[] = Array.from({ length: exercise.sets }, (_, index) => ({
-    id: uid('set'),
-    index,
-    type: 'work',
-    weight: recommendation.weight,
-    reps: exercise.reps,
-    completed: false,
-  }));
-  return {
-    id: uid('log'),
-    planExerciseId: exercise.id,
-    exerciseName: exercise.name,
-    muscleGroup: exercise.muscleGroup,
-    unit: exercise.unit,
-    targetSets: exercise.sets,
-    targetReps: exercise.reps,
-    technique: exercise.technique,
-    sets: [...warmups, ...sets],
-  };
-}
 
 function firstIncompleteExercise(session: WorkoutSession) {
   const index = session.exercises.findIndex((exercise) =>
@@ -160,7 +120,7 @@ export function WorkoutScreen({
       date: format(new Date(), 'yyyy-MM-dd'),
       startedAt: new Date().toISOString(),
       status: 'active',
-      exercises: day.exercises.map((exercise) => makeExerciseLog(data, plan, day, exercise)),
+      exercises: day.exercises.map((exercise) => buildExerciseLog(data, plan, day, exercise)),
       cardioMinutes: 0,
     };
     updateData((current) => ({ ...current, sessions: [session, ...current.sessions] }));
@@ -298,7 +258,7 @@ export function WorkoutScreen({
                   <CardContent className="flex items-center gap-3 px-3">
                     <div className="grid size-9 place-items-center rounded-full bg-[#eeeeea] text-xs font-black dark:bg-white/10">{String(index + 1).padStart(2, '0')}</div>
                     <div className="min-w-0 flex-1"><p className="truncate text-sm font-extrabold">{exercise.name}</p><p className="mt-0.5 text-xs text-black/45 dark:text-white/45">{exercise.sets}×{exercise.reps} · {exercise.restSeconds}s</p></div>
-                    <div className="text-right"><p className="text-sm font-black">{recommendation.weight || '—'} {exercise.unit === 'peso corporal' ? '' : exercise.unit}</p><p className="text-[10px] font-semibold uppercase text-black/35 dark:text-white/35">{recommendation.action === 'increase' ? 'Subir' : recommendation.action === 'decrease' ? 'Bajar' : recommendation.action === 'maintain' ? 'Mantener' : 'Calibrar'}</p></div>
+                    <div className="text-right"><p className="text-sm font-black">{recommendation.weight ? formatWeight(recommendation.weight) : '—'} {exercise.unit === 'peso corporal' ? '' : exercise.unit}</p><p className="text-[10px] font-semibold uppercase text-black/35 dark:text-white/35">{recommendation.action === 'increase' ? 'Subir' : recommendation.action === 'decrease' ? 'Bajar' : recommendation.action === 'maintain' ? 'Mantener' : 'Calibrar'}</p></div>
                   </CardContent>
                 </Card>
               );
@@ -367,7 +327,7 @@ export function WorkoutScreen({
           {currentLog.sets.map((set) => (
             <div key={set.id} className={`grid grid-cols-[34px_1fr_1fr_44px] items-center gap-2 rounded-[18px] p-2 transition ${set.completed ? 'bg-black text-white dark:bg-white dark:text-black' : set.type === 'warmup' ? 'bg-[#deded9] dark:bg-white/10' : 'bg-white ring-1 ring-black/6 dark:bg-[#1c1c1c] dark:ring-white/10'}`}>
               <div className="grid size-8 place-items-center rounded-full text-xs font-black">{set.type === 'warmup' ? 'C' : set.index + 1}</div>
-              <div className="relative"><Input aria-label={`Peso serie ${set.index + 1}`} type="number" inputMode="decimal" step="0.5" value={set.weight} onChange={(event) => updateSet(set.id, { weight: Number(event.target.value) })} className={`h-11 rounded-xl pr-8 text-center text-base font-black ${set.completed ? 'border-white/15 bg-white/10 text-white dark:border-black/15 dark:bg-black/10 dark:text-black' : 'bg-transparent'}`} /><span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-bold opacity-45">KG</span></div>
+              <div className="relative"><DecimalWeightInput aria-label={`Peso serie ${set.index + 1} en kilogramos`} value={set.weight} onValueChange={(weight) => updateSet(set.id, { weight: weight ?? 0 })} className={`h-11 rounded-xl pr-8 text-center text-base font-black ${set.completed ? 'border-white/15 bg-white/10 text-white dark:border-black/15 dark:bg-black/10 dark:text-black' : 'bg-transparent'}`} /><span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-bold opacity-45">KG</span></div>
               <Input aria-label={`Repeticiones serie ${set.index + 1}`} type="number" inputMode="numeric" value={set.reps} onChange={(event) => updateSet(set.id, { reps: Number(event.target.value) })} className={`h-11 rounded-xl text-center text-base font-black ${set.completed ? 'border-white/15 bg-white/10 text-white dark:border-black/15 dark:bg-black/10 dark:text-black' : 'bg-transparent'}`} />
               <button type="button" aria-label={set.completed ? 'Desmarcar serie' : 'Completar serie'} onClick={() => completeSet(set)} className={`grid size-10 place-items-center rounded-full transition ${set.completed ? 'bg-white text-black dark:bg-black dark:text-white' : 'bg-[#eeeeea] dark:bg-white/10'}`}>{set.completed ? <Check className="size-5" strokeWidth={3} /> : <Circle className="size-5 opacity-30" />}</button>
             </div>

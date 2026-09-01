@@ -9,7 +9,6 @@ import {
   Dumbbell,
   Pencil,
   Plus,
-  RotateCcw,
   Trash2,
 } from 'lucide-react';
 
@@ -34,6 +33,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { DecimalWeightInput } from './decimal-weight-input';
 import { ScreenHeader, SectionTitle } from './shared';
 import { uid } from '@/lib/gymletics/defaults';
 import type {
@@ -451,7 +451,7 @@ export function PlansScreen({
             <div><Label htmlFor="muscle-group">Grupo muscular</Label><Input id="muscle-group" className="mt-1 h-10" value={exerciseDraft.muscleGroup} onChange={(event) => setExerciseDraft((current) => ({ ...current, muscleGroup: event.target.value }))} placeholder="Pecho" /></div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Unidad</Label><Select value={exerciseDraft.unit} onValueChange={(value) => setExerciseDraft((current) => ({ ...current, unit: value as WeightUnit }))}><SelectTrigger className="mt-1 h-10 w-full"><SelectValue /></SelectTrigger><SelectContent>{units.map((unit) => <SelectItem key={unit} value={unit}>{unit}</SelectItem>)}</SelectContent></Select></div>
-              <div><Label htmlFor="increment">Incremento</Label><Input id="increment" type="number" step="0.5" className="mt-1 h-10" value={exerciseDraft.increment} onChange={(event) => setExerciseDraft((current) => ({ ...current, increment: Number(event.target.value) }))} /></div>
+              <div><Label htmlFor="increment">Incremento</Label><DecimalWeightInput id="increment" className="mt-1 h-10" value={exerciseDraft.increment} onValueChange={(increment) => setExerciseDraft((current) => ({ ...current, increment: increment ?? 0 }))} /></div>
             </div>
             <div className="grid grid-cols-3 gap-3">
               <div><Label htmlFor="sets">Series</Label><Input id="sets" type="number" className="mt-1 h-10" value={exerciseDraft.sets} onChange={(event) => setExerciseDraft((current) => ({ ...current, sets: Number(event.target.value) }))} /></div>
