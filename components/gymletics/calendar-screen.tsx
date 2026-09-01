@@ -32,6 +32,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { ManualWorkoutDialog } from './manual-workout-dialog';
 import { ScreenHeader, SectionTitle } from './shared';
 import { formatWeight } from '@/lib/gymletics/weight-format';
@@ -70,6 +72,11 @@ function StatusCalendarDayButton(props: ComponentProps<typeof CalendarDayButton>
   );
 }
 
+function moveTimestampToDate(timestamp: string, date: string) {
+  const timeSeparator = timestamp.indexOf('T');
+  return timeSeparator >= 0 ? `${date}${timestamp.slice(timeSeparator)}` : `${date}T12:00:00.000Z`;
+}
+
 export function CalendarScreen({
   data,
   updateData,
@@ -80,7 +87,10 @@ export function CalendarScreen({
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [markDialogOpen, setMarkDialogOpen] = useState(false);
   const [sessionDialog, setSessionDialog] = useState<WorkoutSession | null>(null);
+  const [sessionDateDraft, setSessionDateDraft] = useState('');
+  const [sessionDateError, setSessionDateError] = useState('');
   const [manualDate, setManualDate] = useState<string | null>(null);
+  const todayIso = format(new Date(), 'yyyy-MM-dd');
   const iso = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : '';
   const selectedMark = data.calendarMarks.find((mark) => mark.date === iso);
   const selectedSession = data.sessions.find((session) => session.status === 'completed' && session.date === iso);
@@ -124,6 +134,73 @@ export function CalendarScreen({
     setMarkDialogOpen(false);
   }
 
+  function openSessionDialog(session: WorkoutSession) {
+    setSessionDialog(session);
+    setSessionDateDraft(session.date);
+    setSessionDateError('');
+  }
+
+  function closeSessionDialog() {
+    setSessionDialog(null);
+    setSessionDateDraft('');
+    setSessionDateError('');
+  }
+
+  function saveSessionDate() {
+    if (!sessionDialog) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(sessionDateDraft)) {
+      setSessionDateError('Selecciona una fecha válida.');
+      return;
+    }
+    if (sessionDateDraft > todayIso) {
+      setSessionDateError('La fecha del entrenamiento no puede estar en el futuro.');
+      return;
+    }
+    if (sessionDateDraft === sessionDialog.date) return;
+
+    const previousDate = sessionDialog.date;
+    const updatedSession: WorkoutSession = {
+      ...sessionDialog,
+      date: sessionDateDraft,
+      startedAt: moveTimestampToDate(sessionDialog.startedAt, sessionDateDraft),
+      completedAt: sessionDialog.completedAt
+        ? moveTimestampToDate(sessionDialog.completedAt, sessionDateDraft)
+        : undefined,
+    };
+
+    updateData((current) => {
+      const previousMark = current.calendarMarks.find((mark) => mark.date === previousDate);
+      const destinationMark = current.calendarMarks.find((mark) => mark.date === sessionDateDraft);
+      const anotherCompletedSessionOnPreviousDate = current.sessions.some(
+        (session) => session.id !== sessionDialog.id && session.status === 'completed' && session.date === previousDate,
+      );
+      const calendarMarks = current.calendarMarks.filter(
+        (mark) => mark.date !== previousDate && mark.date !== sessionDateDraft,
+      );
+
+      if (anotherCompletedSessionOnPreviousDate) {
+        calendarMarks.push({ date: previousDate, status: 'completed' });
+      } else if (previousMark && previousMark.status !== 'completed') {
+        calendarMarks.push(previousMark);
+      }
+      calendarMarks.push({
+        date: sessionDateDraft,
+        status: 'completed',
+        ...(destinationMark?.note ? { note: destinationMark.note } : {}),
+      });
+
+      return {
+        ...current,
+        sessions: current.sessions.map((session) => session.id === updatedSession.id ? updatedSession : session),
+        calendarMarks,
+      };
+    });
+
+    setSessionDialog(updatedSession);
+    setSelectedDate(new Date(`${sessionDateDraft}T12:00:00`));
+    setSessionDateError('');
+  }
+
   return (
     <div className="pb-28">
       <ScreenHeader title="Calendario" subtitle="Planificación y cumplimiento" action={<Button size="sm" className="rounded-full" onClick={() => setManualDate(format(new Date(), 'yyyy-MM-dd'))}><Plus /> Añadir</Button>} />
@@ -156,15 +233,50 @@ export function CalendarScreen({
 
         <section>
           <SectionTitle eyebrow="Historial" title="Sesiones recientes" />
-          {recentSessions.length ? <div className="space-y-2">{recentSessions.map((session) => <button type="button" key={session.id} onClick={() => setSessionDialog(session)} className="flex w-full items-center gap-3 rounded-[18px] bg-white p-3 text-left ring-1 ring-black/6 dark:bg-[#1c1c1c] dark:ring-white/10"><div className="grid size-10 shrink-0 place-items-center rounded-full bg-black text-white dark:bg-white dark:text-black"><Dumbbell className="size-4" /></div><div className="min-w-0 flex-1"><p className="truncate text-sm font-extrabold">{session.dayName} · {session.focus}</p><p className="mt-0.5 text-xs text-black/45 dark:text-white/45">{format(new Date(`${session.date}T12:00:00`), "d 'de' MMMM", { locale: es })} · {session.exercises.length} ejercicios</p></div><ChevronRight className="size-4 text-black/25 dark:text-white/25" /></button>)}</div> : <p className="rounded-2xl border border-dashed border-black/15 p-5 text-center text-sm text-black/45 dark:border-white/15 dark:text-white/45">Las sesiones completadas aparecerán aquí.</p>}
+          {recentSessions.length ? <div className="space-y-2">{recentSessions.map((session) => <button type="button" key={session.id} onClick={() => openSessionDialog(session)} className="flex w-full items-center gap-3 rounded-[18px] bg-white p-3 text-left ring-1 ring-black/6 dark:bg-[#1c1c1c] dark:ring-white/10"><div className="grid size-10 shrink-0 place-items-center rounded-full bg-black text-white dark:bg-white dark:text-black"><Dumbbell className="size-4" /></div><div className="min-w-0 flex-1"><p className="truncate text-sm font-extrabold">{session.dayName} · {session.focus}</p><p className="mt-0.5 text-xs text-black/45 dark:text-white/45">{format(new Date(`${session.date}T12:00:00`), "d 'de' MMMM", { locale: es })} · {session.exercises.length} ejercicios</p></div><ChevronRight className="size-4 text-black/25 dark:text-white/25" /></button>)}</div> : <p className="rounded-2xl border border-dashed border-black/15 p-5 text-center text-sm text-black/45 dark:border-white/15 dark:text-white/45">Las sesiones completadas aparecerán aquí.</p>}
         </section>
       </div>
 
-      <Dialog open={markDialogOpen} onOpenChange={setMarkDialogOpen}><DialogContent className="max-h-[90dvh] overflow-y-auto"><DialogHeader><DialogTitle>{selectedDate ? format(selectedDate, "d 'de' MMMM 'de' yyyy", { locale: es }) : 'Marcar día'}</DialogTitle><DialogDescription>{selectedSession ? `${selectedSession.dayName} ya está registrado como completado.` : 'Indica cómo debe contar esta fecha en tu planificación.'}</DialogDescription></DialogHeader><div className="grid grid-cols-2 gap-2">{statuses.map(({ value, label, description, icon: Icon }) => <button key={value} type="button" disabled={Boolean(selectedSession && value !== 'completed')} onClick={() => markDay(value)} className={`rounded-[16px] p-3 text-left ring-1 transition disabled:cursor-not-allowed disabled:opacity-30 ${selectedMark?.status === value || (value === 'completed' && selectedSession) ? 'bg-black text-white ring-black dark:bg-white dark:text-black dark:ring-white' : 'bg-white ring-black/8 hover:bg-black/3 dark:bg-white/5 dark:ring-white/10'}`}><Icon className="mb-3 size-4" /><p className="text-sm font-extrabold">{label}</p><p className="mt-0.5 text-[10px] opacity-50">{description}</p></button>)}</div><DialogFooter>{selectedMark && !selectedSession ? <Button variant="destructive" onClick={clearMark}>Quitar marca</Button> : null}<Button variant="outline" onClick={() => setMarkDialogOpen(false)}>Cerrar</Button><Button onClick={() => { setMarkDialogOpen(false); if (selectedSession) setSessionDialog(selectedSession); else if (iso) setManualDate(iso); }}><Dumbbell /> {selectedSession ? 'Ver entrenamiento' : 'Registrar entrenamiento'}</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={markDialogOpen} onOpenChange={setMarkDialogOpen}><DialogContent className="max-h-[90dvh] overflow-y-auto"><DialogHeader><DialogTitle>{selectedDate ? format(selectedDate, "d 'de' MMMM 'de' yyyy", { locale: es }) : 'Marcar día'}</DialogTitle><DialogDescription>{selectedSession ? `${selectedSession.dayName} ya está registrado como completado.` : 'Indica cómo debe contar esta fecha en tu planificación.'}</DialogDescription></DialogHeader><div className="grid grid-cols-2 gap-2">{statuses.map(({ value, label, description, icon: Icon }) => <button key={value} type="button" disabled={Boolean(selectedSession && value !== 'completed')} onClick={() => markDay(value)} className={`rounded-[16px] p-3 text-left ring-1 transition disabled:cursor-not-allowed disabled:opacity-30 ${selectedMark?.status === value || (value === 'completed' && selectedSession) ? 'bg-black text-white ring-black dark:bg-white dark:text-black dark:ring-white' : 'bg-white ring-black/8 hover:bg-black/3 dark:bg-white/5 dark:ring-white/10'}`}><Icon className="mb-3 size-4" /><p className="text-sm font-extrabold">{label}</p><p className="mt-0.5 text-[10px] opacity-50">{description}</p></button>)}</div><DialogFooter>{selectedMark && !selectedSession ? <Button variant="destructive" onClick={clearMark}>Quitar marca</Button> : null}<Button variant="outline" onClick={() => setMarkDialogOpen(false)}>Cerrar</Button><Button onClick={() => { setMarkDialogOpen(false); if (selectedSession) openSessionDialog(selectedSession); else if (iso) setManualDate(iso); }}><Dumbbell /> {selectedSession ? 'Ver entrenamiento' : 'Registrar entrenamiento'}</Button></DialogFooter></DialogContent></Dialog>
 
-      <Dialog open={Boolean(sessionDialog)} onOpenChange={(open) => { if (!open) setSessionDialog(null); }}><DialogContent className="max-h-[90dvh] overflow-y-auto"><DialogHeader><DialogTitle>{sessionDialog?.dayName}</DialogTitle><DialogDescription>{sessionDialog ? `${format(new Date(`${sessionDialog.date}T12:00:00`), "d 'de' MMMM 'de' yyyy", { locale: es })} · ${sessionDialog.focus}` : ''}</DialogDescription></DialogHeader><div className="space-y-2">{sessionDialog?.exercises.map((exercise) => { const working = exercise.sets.filter((set) => set.type === 'work' && set.completed); return <div key={exercise.id} className="rounded-[16px] bg-black/4 p-3 dark:bg-white/6"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-extrabold">{exercise.exerciseName}</p><p className="mt-0.5 text-xs text-black/45 dark:text-white/45">{working.map((set) => `${formatWeight(set.weight)}×${set.reps}`).join(' · ') || 'Sin series completadas'}</p></div>{exercise.restPause ? <Badge variant="outline">RP {exercise.restPause[0]}+{exercise.restPause[1]}</Badge> : null}</div></div>; })}<div className="flex items-center justify-between rounded-[16px] bg-black p-3 text-white"><span className="text-sm font-extrabold">Cardio</span><span className="text-sm font-black">{sessionDialog?.cardioMinutes ?? 0} min</span></div></div><DialogFooter><Button onClick={() => setSessionDialog(null)}>Cerrar</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={Boolean(sessionDialog)} onOpenChange={(open) => { if (!open) closeSessionDialog(); }}>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{sessionDialog?.dayName}</DialogTitle>
+            <DialogDescription>{sessionDialog ? `${format(new Date(`${sessionDialog.date}T12:00:00`), "d 'de' MMMM 'de' yyyy", { locale: es })} · ${sessionDialog.focus}` : ''}</DialogDescription>
+          </DialogHeader>
+          <div className="rounded-[16px] border border-black/8 bg-black/3 p-3 dark:border-white/10 dark:bg-white/5">
+            <Label htmlFor="completed-session-date">Fecha del entrenamiento</Label>
+            <div className="mt-1.5 grid grid-cols-[1fr_auto] gap-2">
+              <Input
+                id="completed-session-date"
+                type="date"
+                max={todayIso}
+                value={sessionDateDraft}
+                onChange={(event) => {
+                  setSessionDateDraft(event.target.value);
+                  setSessionDateError('');
+                }}
+                className="h-10"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                className="h-10"
+                disabled={!sessionDateDraft || sessionDateDraft === sessionDialog?.date}
+                onClick={saveSessionDate}
+              >
+                Cambiar fecha
+              </Button>
+            </div>
+            {sessionDateError ? <p role="alert" className="mt-2 text-xs font-semibold text-red-600 dark:text-red-400">{sessionDateError}</p> : null}
+          </div>
+          <div className="space-y-2">{sessionDialog?.exercises.map((exercise) => { const working = exercise.sets.filter((set) => set.type === 'work' && set.completed); return <div key={exercise.id} className="rounded-[16px] bg-black/4 p-3 dark:bg-white/6"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-extrabold">{exercise.exerciseName}</p><p className="mt-0.5 text-xs text-black/45 dark:text-white/45">{working.map((set) => `${formatWeight(set.weight)}×${set.reps}`).join(' · ') || 'Sin series completadas'}</p></div>{exercise.restPause && exercise.restPause.some((repetitions) => repetitions > 0) ? <Badge variant="outline">RP {exercise.restPause.map((repetitions) => repetitions || '—').join('+')}</Badge> : null}</div></div>; })}<div className="flex items-center justify-between rounded-[16px] bg-black p-3 text-white"><span className="text-sm font-extrabold">Cardio</span><span className="text-sm font-black">{sessionDialog?.cardioMinutes ?? 0} min</span></div></div>
+          <DialogFooter><Button onClick={closeSessionDialog}>Cerrar</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      {manualDate ? <ManualWorkoutDialog key={manualDate} data={data} updateData={updateData} initialDate={manualDate} onClose={() => setManualDate(null)} onSaved={setSessionDialog} /> : null}
+      {manualDate ? <ManualWorkoutDialog key={manualDate} data={data} updateData={updateData} initialDate={manualDate} onClose={() => setManualDate(null)} onSaved={openSessionDialog} /> : null}
     </div>
   );
 }

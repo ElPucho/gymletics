@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DecimalWeightInput } from './decimal-weight-input';
+import { EditableIntegerInput } from './editable-integer-input';
 import { uid } from '@/lib/gymletics/defaults';
 import { buildExerciseLog } from '@/lib/gymletics/session-builder';
 import type {
@@ -112,13 +113,18 @@ export function ManualWorkoutDialog({
     }));
   }
 
-  function updateRestPause(exerciseId: string, position: 0 | 1, value: number) {
+  function updateRestPause(exerciseId: string, position: 0 | 1, value: number | null) {
     setDraft((current) => ({
       ...current,
       exercises: current.exercises.map((exercise) => {
         if (exercise.id !== exerciseId) return exercise;
         const restPause: [number, number] = exercise.restPause ? [...exercise.restPause] : [0, 0];
-        restPause[position] = Math.max(0, value);
+        restPause[position] = Math.max(0, value ?? 0);
+        if (restPause.every((repetitions) => repetitions === 0)) {
+          const updatedExercise = { ...exercise };
+          delete updatedExercise.restPause;
+          return updatedExercise;
+        }
         return { ...exercise, restPause };
       }),
     }));
@@ -240,13 +246,10 @@ export function ManualWorkoutDialog({
                           onValueChange={(weight) => updateSet(exercise.id, set.id, { weight: weight ?? 0 })}
                           className="h-10 rounded-xl text-center text-sm font-black"
                         />
-                        <Input
+                        <EditableIntegerInput
                           aria-label={`Repeticiones de ${exercise.exerciseName}, serie ${set.index + 1}`}
-                          type="number"
-                          inputMode="numeric"
-                          min={0}
                           value={set.reps}
-                          onChange={(event) => updateSet(exercise.id, set.id, { reps: Math.max(0, Number(event.target.value)) })}
+                          onValueChange={(reps) => updateSet(exercise.id, set.id, { reps: reps ?? 0 })}
                           className="h-10 rounded-xl text-center text-sm font-black"
                         />
                         <button
@@ -262,9 +265,9 @@ export function ManualWorkoutDialog({
                   </div>
                   {exercise.technique === 'rest-pause' ? (
                     <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-2 border-t border-black/8 pt-3 dark:border-white/10">
-                      <Input aria-label={`Primer bloque rest-pause de ${exercise.exerciseName}`} type="number" inputMode="numeric" min={0} value={exercise.restPause?.[0] ?? 0} onChange={(event) => updateRestPause(exercise.id, 0, Number(event.target.value))} className="h-9 rounded-xl text-center font-black" />
+                      <EditableIntegerInput aria-label={`Primer bloque rest-pause de ${exercise.exerciseName}`} value={exercise.restPause?.[0] ?? null} zeroAsEmpty onValueChange={(value) => updateRestPause(exercise.id, 0, value)} className="h-9 rounded-xl text-center font-black" />
                       <span className="text-xs font-black">RP +</span>
-                      <Input aria-label={`Segundo bloque rest-pause de ${exercise.exerciseName}`} type="number" inputMode="numeric" min={0} value={exercise.restPause?.[1] ?? 0} onChange={(event) => updateRestPause(exercise.id, 1, Number(event.target.value))} className="h-9 rounded-xl text-center font-black" />
+                      <EditableIntegerInput aria-label={`Segundo bloque rest-pause de ${exercise.exerciseName}`} value={exercise.restPause?.[1] ?? null} zeroAsEmpty onValueChange={(value) => updateRestPause(exercise.id, 1, value)} className="h-9 rounded-xl text-center font-black" />
                     </div>
                   ) : null}
                 </section>

@@ -24,6 +24,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Progress, ProgressLabel, ProgressValue } from '@/components/ui/progress';
 import { DecimalWeightInput } from './decimal-weight-input';
+import { EditableIntegerInput } from './editable-integer-input';
 import { ScreenHeader } from './shared';
 import { uid } from '@/lib/gymletics/defaults';
 import { recommendWeight } from '@/lib/gymletics/progression';
@@ -155,14 +156,19 @@ export function WorkoutScreen({
     }
   }
 
-  function setRestPause(position: 0 | 1, value: number) {
+  function setRestPause(position: 0 | 1, value: number | null) {
     updateSession((session) => ({
       ...session,
       exercises: session.exercises.map((exercise, index) => {
         if (index !== exerciseIndex) return exercise;
         const next: [number, number] = exercise.restPause ? [...exercise.restPause] : [0, 0];
-        next[position] = Math.max(0, value);
-        return { ...exercise, restPause: [...next] as [number, number] };
+        next[position] = Math.max(0, value ?? 0);
+        if (next.every((repetitions) => repetitions === 0)) {
+          const updatedExercise = { ...exercise };
+          delete updatedExercise.restPause;
+          return updatedExercise;
+        }
+        return { ...exercise, restPause: next };
       }),
     }));
   }
@@ -328,7 +334,7 @@ export function WorkoutScreen({
             <div key={set.id} className={`grid grid-cols-[34px_1fr_1fr_44px] items-center gap-2 rounded-[18px] p-2 transition ${set.completed ? 'bg-black text-white dark:bg-white dark:text-black' : set.type === 'warmup' ? 'bg-[#deded9] dark:bg-white/10' : 'bg-white ring-1 ring-black/6 dark:bg-[#1c1c1c] dark:ring-white/10'}`}>
               <div className="grid size-8 place-items-center rounded-full text-xs font-black">{set.type === 'warmup' ? 'C' : set.index + 1}</div>
               <div className="relative"><DecimalWeightInput aria-label={`Peso serie ${set.index + 1} en kilogramos`} value={set.weight} onValueChange={(weight) => updateSet(set.id, { weight: weight ?? 0 })} className={`h-11 rounded-xl pr-8 text-center text-base font-black ${set.completed ? 'border-white/15 bg-white/10 text-white dark:border-black/15 dark:bg-black/10 dark:text-black' : 'bg-transparent'}`} /><span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-bold opacity-45">KG</span></div>
-              <Input aria-label={`Repeticiones serie ${set.index + 1}`} type="number" inputMode="numeric" value={set.reps} onChange={(event) => updateSet(set.id, { reps: Number(event.target.value) })} className={`h-11 rounded-xl text-center text-base font-black ${set.completed ? 'border-white/15 bg-white/10 text-white dark:border-black/15 dark:bg-black/10 dark:text-black' : 'bg-transparent'}`} />
+              <EditableIntegerInput aria-label={`Repeticiones serie ${set.index + 1}`} value={set.reps} onValueChange={(reps) => updateSet(set.id, { reps: reps ?? 0 })} className={`h-11 rounded-xl text-center text-base font-black ${set.completed ? 'border-white/15 bg-white/10 text-white dark:border-black/15 dark:bg-black/10 dark:text-black' : 'bg-transparent'}`} />
               <button type="button" aria-label={set.completed ? 'Desmarcar serie' : 'Completar serie'} onClick={() => completeSet(set)} className={`grid size-10 place-items-center rounded-full transition ${set.completed ? 'bg-white text-black dark:bg-black dark:text-white' : 'bg-[#eeeeea] dark:bg-white/10'}`}>{set.completed ? <Check className="size-5" strokeWidth={3} /> : <Circle className="size-5 opacity-30" />}</button>
             </div>
           ))}
@@ -339,7 +345,7 @@ export function WorkoutScreen({
             <CardContent className="px-4">
               <div className="flex items-center gap-2"><Flame className="size-4" /><p className="text-sm font-extrabold">Rest-pause final</p></div>
               <p className="mt-1 text-xs text-black/50 dark:text-white/50">10 s → fallo → 10 s → fallo</p>
-              <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-3"><Input aria-label="Primer bloque rest-pause" type="number" inputMode="numeric" className="h-12 rounded-xl text-center text-lg font-black" value={currentLog.restPause?.[0] ?? ''} onChange={(event) => setRestPause(0, Number(event.target.value))} /><span className="text-xl font-black">+</span><Input aria-label="Segundo bloque rest-pause" type="number" inputMode="numeric" className="h-12 rounded-xl text-center text-lg font-black" value={currentLog.restPause?.[1] ?? ''} onChange={(event) => setRestPause(1, Number(event.target.value))} /></div>
+              <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-3"><EditableIntegerInput aria-label="Primer bloque rest-pause" className="h-12 rounded-xl text-center text-lg font-black" value={currentLog.restPause?.[0] ?? null} zeroAsEmpty onValueChange={(value) => setRestPause(0, value)} /><span className="text-xl font-black">+</span><EditableIntegerInput aria-label="Segundo bloque rest-pause" className="h-12 rounded-xl text-center text-lg font-black" value={currentLog.restPause?.[1] ?? null} zeroAsEmpty onValueChange={(value) => setRestPause(1, value)} /></div>
             </CardContent>
           </Card>
         ) : null}
