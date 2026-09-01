@@ -39,7 +39,10 @@ export const metadata: Metadata = {
     images: [socialImage.toString()],
   },
   icons: {
-    icon: publicAsset('/icon.svg'),
+    icon: [
+      { url: publicAsset('/favicon-32.png'), sizes: '32x32', type: 'image/png' },
+      { url: publicAsset('/icon-192.png'), sizes: '192x192', type: 'image/png' },
+    ],
     apple: publicAsset('/apple-touch-icon.png'),
   },
   appleWebApp: {

@@ -1,7 +1,12 @@
-const CACHE = 'gymletics-shell-v2';
+const CACHE = 'gymletics-shell-v3';
 const SCOPE_ROOT = new URL('./', self.registration.scope).pathname;
 const scopedPath = (path) => new URL(path, self.registration.scope).pathname;
-const SHELL = [SCOPE_ROOT, scopedPath('manifest.webmanifest'), scopedPath('icon.svg')];
+const SHELL = [
+  SCOPE_ROOT,
+  scopedPath('manifest.webmanifest'),
+  scopedPath('icon-192.png'),
+  scopedPath('icon-maskable-512.png'),
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)));
@@ -22,7 +27,7 @@ self.addEventListener('fetch', (event) => {
       fetch(event.request)
         .then((response) => {
           const copy = response.clone();
-          caches.open(CACHE).then((cache) => cache.put(SCOPE_ROOT, copy));
+          void caches.open(CACHE).then((cache) => cache.put(SCOPE_ROOT, copy));
           return response;
         })
         .catch(() => caches.match(SCOPE_ROOT)),
@@ -33,7 +38,7 @@ self.addEventListener('fetch', (event) => {
     caches.match(event.request).then((cached) => cached ?? fetch(event.request).then((response) => {
       if (response.ok && new URL(event.request.url).origin === self.location.origin) {
         const copy = response.clone();
-        caches.open(CACHE).then((cache) => cache.put(event.request, copy));
+        void caches.open(CACHE).then((cache) => cache.put(event.request, copy));
       }
       return response;
     })),
