@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Check,
   ChevronDown,
@@ -15,6 +15,16 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import {
   Dialog,
   DialogContent,
@@ -79,6 +89,8 @@ export function PlansScreen({
   const [selectedPlanId, setSelectedPlanId] = useState(data.activePlanId);
   const [selectedDayId, setSelectedDayId] = useState('');
   const [planDialogOpen, setPlanDialogOpen] = useState(false);
+  const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
+  const [deletePlanId, setDeletePlanId] = useState<string | null>(null);
   const [planName, setPlanName] = useState('');
   const [dayDialogOpen, setDayDialogOpen] = useState(false);
   const [editingDayId, setEditingDayId] = useState<string | null>(null);
@@ -91,11 +103,6 @@ export function PlansScreen({
 
   const plan = data.plans.find((item) => item.id === selectedPlanId) ?? data.plans[0];
   const day = plan?.days.find((item) => item.id === selectedDayId) ?? plan?.days[0];
-
-  useEffect(() => {
-    if (!plan) return;
-    if (!plan.days.some((item) => item.id === selectedDayId)) setSelectedDayId(plan.days[0]?.id ?? '');
-  }, [plan, selectedDayId]);
 
   const totalExercises = useMemo(
     () => plan?.days.reduce((total, item) => total + item.exercises.length, 0) ?? 0,
@@ -112,21 +119,51 @@ export function PlansScreen({
     }));
   }
 
-  function createPlan() {
+  function openNewPlan() {
+    setEditingPlanId(null);
+    setPlanName('');
+    setPlanDialogOpen(true);
+  }
+
+  function openEditPlan() {
+    if (!plan) return;
+    setEditingPlanId(plan.id);
+    setPlanName(plan.name);
+    setPlanDialogOpen(true);
+  }
+
+  function closePlanDialog() {
+    setPlanDialogOpen(false);
+    setEditingPlanId(null);
+    setPlanName('');
+  }
+
+  function savePlan() {
     const name = planName.trim();
     if (!name) return;
+    if (editingPlanId) {
+      updateData((current) => ({
+        ...current,
+        plans: current.plans.map((item) => item.id === editingPlanId
+          ? { ...item, name, updatedAt: new Date().toISOString() }
+          : item),
+      }));
+      closePlanDialog();
+      return;
+    }
+
     const now = new Date().toISOString();
     const firstDay: RoutineDay = { id: uid('day'), name: 'Día 1', focus: '', exercises: [], cardioMinutes: 20 };
     const next: WorkoutPlan = { id: uid('plan'), name, days: [firstDay], createdAt: now, updatedAt: now };
     updateData((current) => ({
       ...current,
       plans: [...current.plans, next],
+      activePlanId: current.plans.some((item) => item.id === current.activePlanId) ? current.activePlanId : next.id,
       nextDayByPlan: { ...current.nextDayByPlan, [next.id]: 0 },
     }));
     setSelectedPlanId(next.id);
     setSelectedDayId(firstDay.id);
-    setPlanName('');
-    setPlanDialogOpen(false);
+    closePlanDialog();
   }
 
   function duplicatePlan() {
@@ -158,15 +195,23 @@ export function PlansScreen({
   }
 
   function deletePlan() {
-    if (!plan || data.plans.length <= 1) return;
-    if (!window.confirm(`¿Eliminar “${plan.name}”? El historial de sesiones se conservará.`)) return;
-    const remaining = data.plans.filter((item) => item.id !== plan.id);
+    const planToDelete = data.plans.find((item) => item.id === deletePlanId);
+    if (!planToDelete) {
+      setDeletePlanId(null);
+      return;
+    }
+    const remaining = data.plans.filter((item) => item.id !== planToDelete.id);
     updateData((current) => ({
       ...current,
-      plans: current.plans.filter((item) => item.id !== plan.id),
-      activePlanId: current.activePlanId === plan.id ? remaining[0].id : current.activePlanId,
+      plans: current.plans.filter((item) => item.id !== planToDelete.id),
+      activePlanId: current.activePlanId === planToDelete.id ? (remaining[0]?.id ?? '') : current.activePlanId,
+      nextDayByPlan: Object.fromEntries(
+        Object.entries(current.nextDayByPlan).filter(([planId]) => planId !== planToDelete.id),
+      ),
     }));
-    setSelectedPlanId(remaining[0].id);
+    setSelectedPlanId(remaining[0]?.id ?? '');
+    setSelectedDayId(remaining[0]?.days[0]?.id ?? '');
+    setDeletePlanId(null);
   }
 
   function openNewDay() {
@@ -313,17 +358,17 @@ export function PlansScreen({
     }));
   }
 
-  if (!plan) return null;
-
   return (
     <div className="pb-28">
       <ScreenHeader
         title="Planes"
         subtitle={`${data.plans.length} guardado${data.plans.length === 1 ? '' : 's'}`}
-        action={<Button size="sm" className="rounded-full" onClick={() => setPlanDialogOpen(true)}><Plus /> Plan</Button>}
+        action={<Button size="sm" className="rounded-full" onClick={openNewPlan}><Plus /> Plan</Button>}
       />
 
       <div className="space-y-6 px-4 pt-4">
+        {plan ? (
+          <>
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
           {data.plans.map((item) => (
             <button
@@ -349,11 +394,12 @@ export function PlansScreen({
               </div>
               <Dumbbell className="size-7 text-white/25" />
             </div>
-            <div className="mt-5 grid grid-cols-2 gap-2">
+            <div className="mt-5 grid grid-cols-3 gap-2">
               {data.activePlanId !== plan.id ? <Button className="rounded-full bg-white text-black hover:bg-white/90" onClick={activatePlan}>Activar plan</Button> : <Button className="rounded-full bg-white/12 text-white hover:bg-white/20" disabled>Plan activo</Button>}
+              <Button variant="outline" className="rounded-full border-white/15 bg-transparent text-white hover:bg-white/10" onClick={openEditPlan}><Pencil /> Editar</Button>
               <Button variant="outline" className="rounded-full border-white/15 bg-transparent text-white hover:bg-white/10" onClick={duplicatePlan}><Copy /> Duplicar</Button>
             </div>
-            <button type="button" className="mt-4 text-xs font-semibold text-white/35 hover:text-white" onClick={deletePlan} disabled={data.plans.length <= 1}>Eliminar plan</button>
+            <Button type="button" variant="ghost" size="sm" className="mt-3 rounded-full px-2 text-red-400 hover:bg-red-500/10 hover:text-red-300" onClick={() => setDeletePlanId(plan.id)}><Trash2 /> Eliminar plan</Button>
           </CardContent>
         </Card>
 
@@ -418,18 +464,44 @@ export function PlansScreen({
             </div>
           </section>
         ) : null}
+          </>
+        ) : (
+          <Card className="rounded-[24px] border-dashed bg-white py-8 ring-black/8 dark:bg-[#1c1c1c] dark:ring-white/10">
+            <CardContent className="px-6 text-center">
+              <div className="mx-auto grid size-12 place-items-center rounded-full bg-black text-white dark:bg-white dark:text-black"><Dumbbell className="size-5" /></div>
+              <h2 className="mt-4 text-xl font-black tracking-tight">No tienes planes guardados</h2>
+              <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-black/50 dark:text-white/50">Crea un plan y añade los días y ejercicios que quieras. Tus entrenamientos anteriores siguen en el historial.</p>
+              <Button className="mt-5 rounded-full" onClick={openNewPlan}><Plus /> Crear plan</Button>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
-      <Dialog open={planDialogOpen} onOpenChange={setPlanDialogOpen}>
+      <Dialog open={planDialogOpen} onOpenChange={(open) => { if (!open) closePlanDialog(); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Nuevo plan</DialogTitle>
-            <DialogDescription>Crea una secuencia nueva. Después podrás añadir todos los días que quieras.</DialogDescription>
+            <DialogTitle>{editingPlanId ? 'Editar plan' : 'Nuevo plan'}</DialogTitle>
+            <DialogDescription>{editingPlanId ? 'Cambia el nombre del plan. Sus días, ejercicios e historial se conservarán.' : 'Crea una secuencia nueva. Después podrás añadir todos los días que quieras.'}</DialogDescription>
           </DialogHeader>
-          <div><Label htmlFor="plan-name">Nombre</Label><Input id="plan-name" className="mt-1 h-11" value={planName} onChange={(event) => setPlanName(event.target.value)} placeholder="Plan de hipertrofia" autoFocus /></div>
-          <DialogFooter><Button variant="outline" onClick={() => setPlanDialogOpen(false)}>Cancelar</Button><Button onClick={createPlan}>Crear plan</Button></DialogFooter>
+          <div><Label htmlFor="plan-name">Nombre</Label><Input id="plan-name" className="mt-1 h-11" value={planName} onChange={(event) => setPlanName(event.target.value)} placeholder="Plan de hipertrofia" /></div>
+          <DialogFooter><Button variant="outline" onClick={closePlanDialog}>Cancelar</Button><Button onClick={savePlan} disabled={!planName.trim()}>{editingPlanId ? 'Guardar cambios' : 'Crear plan'}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={Boolean(deletePlanId)} onOpenChange={(open) => { if (!open) setDeletePlanId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar este plan?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se eliminarán el plan, sus días y su configuración. Los entrenamientos ya registrados se conservarán en el historial.{data.plans.length === 1 ? ' Después podrás crear un plan nuevo.' : ''}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={deletePlan}><Trash2 /> Eliminar definitivamente</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={dayDialogOpen} onOpenChange={setDayDialogOpen}>
         <DialogContent>
@@ -462,7 +534,7 @@ export function PlansScreen({
               <div><Label>Técnica</Label><Select value={exerciseDraft.technique} onValueChange={(value) => setExerciseDraft((current) => ({ ...current, technique: value as Technique }))}><SelectTrigger className="mt-1 h-10 w-full"><SelectValue /></SelectTrigger><SelectContent>{techniques.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent></Select></div>
               <div><Label htmlFor="warmup">Calentamiento</Label><Input id="warmup" type="number" className="mt-1 h-10" value={exerciseDraft.warmupSets} onChange={(event) => setExerciseDraft((current) => ({ ...current, warmupSets: Number(event.target.value) }))} /></div>
             </div>
-            <label className="flex items-center justify-between rounded-xl bg-black/4 p-3 dark:bg-white/6"><span><span className="block text-sm font-semibold">Ejercicio unilateral</span><span className="text-xs text-black/45 dark:text-white/45">Registra el peso por lado o miembro</span></span><Switch checked={exerciseDraft.unilateral} onCheckedChange={(checked) => setExerciseDraft((current) => ({ ...current, unilateral: checked }))} /></label>
+            <div className="flex items-center justify-between rounded-xl bg-black/4 p-3 dark:bg-white/6"><Label htmlFor="unilateral" className="block"><span className="block text-sm font-semibold">Ejercicio unilateral</span><span className="text-xs font-normal text-black/45 dark:text-white/45">Registra el peso por lado o miembro</span></Label><Switch id="unilateral" checked={exerciseDraft.unilateral} onCheckedChange={(checked) => setExerciseDraft((current) => ({ ...current, unilateral: checked }))} /></div>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setExerciseDialogOpen(false)}>Cancelar</Button><Button onClick={saveExercise}>Guardar ejercicio</Button></DialogFooter>
         </DialogContent>
