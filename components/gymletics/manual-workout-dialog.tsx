@@ -198,8 +198,8 @@ export function ManualWorkoutDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="grid grid-cols-1 gap-3">
-            <div className="min-w-0">
+          <div className="grid grid-cols-1 justify-items-center gap-3">
+            <div className="w-full max-w-[180px] min-w-0">
               <Label htmlFor="manual-workout-date">Fecha</Label>
               <Input
                 id="manual-workout-date"
@@ -210,7 +210,7 @@ export function ManualWorkoutDialog({
                 onChange={(event) => setDraft((current) => ({ ...current, date: event.target.value }))}
               />
             </div>
-            <div className="min-w-0">
+            <div className="w-full max-w-[240px] min-w-0">
               <Label htmlFor="manual-workout-plan">Plan</Label>
               <Select value={draft.planId} onValueChange={(value) => { if (value) selectPlan(value); }}>
                 <SelectTrigger id="manual-workout-plan" className="mt-1 h-10 w-full min-w-0"><SelectValue placeholder="Plan">{selectedPlan?.name}</SelectValue></SelectTrigger>

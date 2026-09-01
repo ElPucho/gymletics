@@ -222,9 +222,9 @@ export function ProgressScreen({
               ))}
             </div>
             {range === 'custom' ? (
-              <div className="grid grid-cols-1 gap-3 min-[460px]:grid-cols-2">
-                <div className="min-w-0"><Label htmlFor="progress-start-date">Desde</Label><Input id="progress-start-date" className="mt-1 h-10 w-full min-w-0" type="date" value={customStart} onChange={(event) => setCustomStart(event.target.value)} /></div>
-                <div className="min-w-0"><Label htmlFor="progress-end-date">Hasta</Label><Input id="progress-end-date" className="mt-1 h-10 w-full min-w-0" type="date" value={customEnd} onChange={(event) => setCustomEnd(event.target.value)} /></div>
+              <div className="flex flex-wrap justify-center gap-3">
+                <div className="w-[156px] max-w-full min-w-0"><Label htmlFor="progress-start-date">Desde</Label><Input id="progress-start-date" className="mt-1 h-10 w-full min-w-0 text-sm" type="date" value={customStart} onChange={(event) => setCustomStart(event.target.value)} /></div>
+                <div className="w-[156px] max-w-full min-w-0"><Label htmlFor="progress-end-date">Hasta</Label><Input id="progress-end-date" className="mt-1 h-10 w-full min-w-0 text-sm" type="date" value={customEnd} onChange={(event) => setCustomEnd(event.target.value)} /></div>
               </div>
             ) : null}
 
