@@ -156,6 +156,31 @@
 }
 
 @layer components {
+  .gym-date-input {
+    display: block;
+    inline-size: 100% !important;
+    min-inline-size: 0 !important;
+    max-inline-size: 100% !important;
+    box-sizing: border-box;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  .gym-date-input::-webkit-date-and-time-value {
+    min-inline-size: 0;
+    text-align: left;
+  }
+
+  .gym-date-input::-webkit-calendar-picker-indicator {
+    position: absolute;
+    inset: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+
   .display-heading {
     font-family: var(--font-app-display);
     font-stretch: condensed;

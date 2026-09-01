@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { format } from 'date-fns';
-import { Check, Circle, Dumbbell } from 'lucide-react';
+import { CalendarDays, Check, Circle, Dumbbell } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -201,14 +201,17 @@ export function ManualWorkoutDialog({
           <div className="grid grid-cols-1 justify-items-center gap-3">
             <div className="w-full max-w-[180px] min-w-0">
               <Label htmlFor="manual-workout-date">Fecha</Label>
-              <Input
-                id="manual-workout-date"
-                type="date"
-                max={todayIso}
-                className="mt-1 h-10 w-full min-w-0"
-                value={draft.date}
-                onChange={(event) => setDraft((current) => ({ ...current, date: event.target.value }))}
-              />
+              <div className="relative mt-1 min-w-0">
+                <Input
+                  id="manual-workout-date"
+                  type="date"
+                  max={todayIso}
+                  className="gym-date-input h-10 min-w-0 pr-9"
+                  value={draft.date}
+                  onChange={(event) => setDraft((current) => ({ ...current, date: event.target.value }))}
+                />
+                <CalendarDays aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-black/45 dark:text-white/45" />
+              </div>
             </div>
             <div className="w-full max-w-[240px] min-w-0">
               <Label htmlFor="manual-workout-plan">Plan</Label>

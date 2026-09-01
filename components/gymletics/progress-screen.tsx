@@ -6,6 +6,7 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   Camera,
+  CalendarDays,
   ChartNoAxesColumnIncreasing,
   Dumbbell,
   Images,
@@ -222,9 +223,21 @@ export function ProgressScreen({
               ))}
             </div>
             {range === 'custom' ? (
-              <div className="flex flex-wrap justify-center gap-3">
-                <div className="w-[156px] max-w-full min-w-0"><Label htmlFor="progress-start-date">Desde</Label><Input id="progress-start-date" className="mt-1 h-10 w-full min-w-0 text-sm" type="date" value={customStart} onChange={(event) => setCustomStart(event.target.value)} /></div>
-                <div className="w-[156px] max-w-full min-w-0"><Label htmlFor="progress-end-date">Hasta</Label><Input id="progress-end-date" className="mt-1 h-10 w-full min-w-0 text-sm" type="date" value={customEnd} onChange={(event) => setCustomEnd(event.target.value)} /></div>
+              <div className="mx-auto grid w-full max-w-[324px] grid-cols-2 gap-3">
+                <div className="min-w-0">
+                  <Label htmlFor="progress-start-date">Desde</Label>
+                  <div className="relative mt-1 min-w-0">
+                    <Input id="progress-start-date" className="gym-date-input h-10 min-w-0 pr-9 text-sm" type="date" value={customStart} onChange={(event) => setCustomStart(event.target.value)} />
+                    <CalendarDays aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-black/45 dark:text-white/45" />
+                  </div>
+                </div>
+                <div className="min-w-0">
+                  <Label htmlFor="progress-end-date">Hasta</Label>
+                  <div className="relative mt-1 min-w-0">
+                    <Input id="progress-end-date" className="gym-date-input h-10 min-w-0 pr-9 text-sm" type="date" value={customEnd} onChange={(event) => setCustomEnd(event.target.value)} />
+                    <CalendarDays aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-black/45 dark:text-white/45" />
+                  </div>
+                </div>
               </div>
             ) : null}
 
