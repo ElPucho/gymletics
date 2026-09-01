@@ -198,22 +198,22 @@ export function ManualWorkoutDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
+          <div className="grid grid-cols-1 gap-3">
+            <div className="min-w-0">
               <Label htmlFor="manual-workout-date">Fecha</Label>
               <Input
                 id="manual-workout-date"
                 type="date"
                 max={todayIso}
-                className="mt-1 h-10"
+                className="mt-1 h-10 w-full min-w-0"
                 value={draft.date}
                 onChange={(event) => setDraft((current) => ({ ...current, date: event.target.value }))}
               />
             </div>
-            <div>
-              <Label>Plan</Label>
+            <div className="min-w-0">
+              <Label htmlFor="manual-workout-plan">Plan</Label>
               <Select value={draft.planId} onValueChange={(value) => { if (value) selectPlan(value); }}>
-                <SelectTrigger className="mt-1 h-10 w-full"><SelectValue placeholder="Plan">{selectedPlan?.name}</SelectValue></SelectTrigger>
+                <SelectTrigger id="manual-workout-plan" className="mt-1 h-10 w-full min-w-0"><SelectValue placeholder="Plan">{selectedPlan?.name}</SelectValue></SelectTrigger>
                 <SelectContent>{data.plans.map((plan) => <SelectItem key={plan.id} value={plan.id}>{plan.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>

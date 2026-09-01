@@ -221,7 +221,12 @@ export function ProgressScreen({
                 <Button key={mode} size="sm" variant={range === mode ? 'default' : 'outline'} className="shrink-0 rounded-full" onClick={() => setRange(mode)}>{mode === 'week' ? 'Semana' : mode === 'month' ? 'Mes' : mode === 'year' ? 'Año' : 'Personalizado'}</Button>
               ))}
             </div>
-            {range === 'custom' ? <div className="grid grid-cols-2 gap-2"><Input aria-label="Fecha inicial" type="date" value={customStart} onChange={(event) => setCustomStart(event.target.value)} /><Input aria-label="Fecha final" type="date" value={customEnd} onChange={(event) => setCustomEnd(event.target.value)} /></div> : null}
+            {range === 'custom' ? (
+              <div className="grid grid-cols-1 gap-3 min-[460px]:grid-cols-2">
+                <div className="min-w-0"><Label htmlFor="progress-start-date">Desde</Label><Input id="progress-start-date" className="mt-1 h-10 w-full min-w-0" type="date" value={customStart} onChange={(event) => setCustomStart(event.target.value)} /></div>
+                <div className="min-w-0"><Label htmlFor="progress-end-date">Hasta</Label><Input id="progress-end-date" className="mt-1 h-10 w-full min-w-0" type="date" value={customEnd} onChange={(event) => setCustomEnd(event.target.value)} /></div>
+              </div>
+            ) : null}
 
             <Select value={selectedExercise} onValueChange={(value) => setSelectedExercise(value ?? '')}>
               <SelectTrigger className="h-12 w-full rounded-[16px] bg-white px-4 font-bold dark:bg-[#1c1c1c]"><SelectValue placeholder="Selecciona un ejercicio" /></SelectTrigger>
