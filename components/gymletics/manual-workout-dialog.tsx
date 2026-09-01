@@ -207,7 +207,7 @@ export function ManualWorkoutDialog({
             <div>
               <Label>Plan</Label>
               <Select value={draft.planId} onValueChange={(value) => { if (value) selectPlan(value); }}>
-                <SelectTrigger className="mt-1 h-10 w-full"><SelectValue placeholder="Plan" /></SelectTrigger>
+                <SelectTrigger className="mt-1 h-10 w-full"><SelectValue placeholder="Plan">{selectedPlan?.name}</SelectValue></SelectTrigger>
                 <SelectContent>{data.plans.map((plan) => <SelectItem key={plan.id} value={plan.id}>{plan.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
@@ -216,7 +216,7 @@ export function ManualWorkoutDialog({
           <div>
             <Label>Día de entrenamiento</Label>
             <Select value={draft.dayId} onValueChange={(value) => { if (value) selectDay(value); }}>
-              <SelectTrigger className="mt-1 h-11 w-full"><SelectValue placeholder="Selecciona un día" /></SelectTrigger>
+              <SelectTrigger className="mt-1 h-11 w-full"><SelectValue placeholder="Selecciona un día">{selectedDay ? `${selectedDay.name} · ${selectedDay.focus || 'Entrenamiento'}` : undefined}</SelectValue></SelectTrigger>
               <SelectContent>{selectedPlan?.days.map((day) => <SelectItem key={day.id} value={day.id}>{day.name} · {day.focus || 'Entrenamiento'}</SelectItem>)}</SelectContent>
             </Select>
           </div>

@@ -16,7 +16,7 @@ export function parseWeightInput(rawValue: string) {
   return Number.isFinite(parsedValue) ? Math.round(parsedValue * 100) / 100 : null;
 }
 
-export function formatWeight(value: number) {
+export function formatWeight(value: number, options: { useGrouping?: boolean } = {}) {
   if (!Number.isFinite(value)) return '';
 
   const roundedValue = Math.round(Math.max(0, value) * 100) / 100;
@@ -24,6 +24,6 @@ export function formatWeight(value: number) {
   return roundedValue.toLocaleString('es-ES', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-    useGrouping: false,
+    useGrouping: options.useGrouping ?? false,
   });
 }

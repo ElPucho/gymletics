@@ -60,7 +60,7 @@ function StatusCalendarDayButton(props: ComponentProps<typeof CalendarDayButton>
           : null;
 
   return (
-    <CalendarDayButton {...props}>
+    <CalendarDayButton {...props} className={`${props.className ?? ''} gym-calendar-day`}>
       {props.children}
       {status === 'completed' ? <i aria-hidden className="pointer-events-none absolute bottom-1 left-1/2 size-1.5 -translate-x-1/2 rounded-full bg-emerald-500" /> : null}
       {status === 'missed' ? <i aria-hidden className="pointer-events-none absolute bottom-1 left-1/2 size-1.5 -translate-x-1/2 rounded-full bg-red-500" /> : null}

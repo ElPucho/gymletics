@@ -27,6 +27,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 import { BrandMark, SaveIndicator } from './shared';
 import { sessionVolume } from '@/lib/gymletics/progression';
+import { formatWeight } from '@/lib/gymletics/weight-format';
 import type { GymleticsData, RoutineDay, WorkoutPlan } from '@/lib/gymletics/types';
 
 const chartConfig = { volume: { label: 'Volumen', theme: { light: '#111111', dark: '#f5f5f5' } } } satisfies ChartConfig;
@@ -195,7 +196,7 @@ export function HomeScreen({
                 </div>
                 <span className="text-xs font-bold">{change >= 0 ? '+' : ''}{change}%</span>
               </div>
-              <p className="text-3xl font-black tracking-[-0.05em]">{(weeklyVolume / 1000).toLocaleString('es-ES', { maximumFractionDigits: 1 })}t</p>
+              <p className="text-3xl font-black tracking-[-0.05em]">{formatWeight(weeklyVolume, { useGrouping: true })} kg</p>
               <p className="mt-1 text-xs font-semibold text-black/50 dark:text-white/50">Volumen semanal</p>
             </CardContent>
           </Card>
