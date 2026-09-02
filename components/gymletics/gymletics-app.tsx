@@ -59,19 +59,18 @@ export function GymleticsApp() {
             onProgress={() => changeView('progress')}
           />
         ) : null}
-        {view === 'workout' ? (
-          <WorkoutScreen
-            data={data}
-            plan={activePlan}
-            day={nextDay}
-            dayIndex={nextDayIndex}
-            updateData={updateData}
-            onDayChange={selectDay}
-            onFinished={() => changeView('home')}
-            autoStart={autoStart}
-            onAutoStartHandled={() => setAutoStart(false)}
-          />
-        ) : null}
+        <WorkoutScreen
+          data={data}
+          plan={activePlan}
+          day={nextDay}
+          dayIndex={nextDayIndex}
+          updateData={updateData}
+          onDayChange={selectDay}
+          onFinished={() => changeView('home')}
+          autoStart={autoStart}
+          onAutoStartHandled={() => setAutoStart(false)}
+          visible={view === 'workout'}
+        />
         {view === 'plans' ? <PlansScreen data={data} updateData={updateData} /> : null}
         {view === 'progress' ? <ProgressScreen data={data} updateData={updateData} /> : null}
         {view === 'calendar' ? <CalendarScreen data={data} updateData={updateData} /> : null}

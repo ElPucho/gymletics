@@ -69,6 +69,7 @@ export function WorkoutScreen({
   onFinished,
   autoStart,
   onAutoStartHandled,
+  visible,
 }: {
   data: GymleticsData;
   plan?: WorkoutPlan;
@@ -79,6 +80,7 @@ export function WorkoutScreen({
   onFinished: () => void;
   autoStart?: boolean;
   onAutoStartHandled?: () => void;
+  visible: boolean;
 }) {
   const activeSession = useMemo(
     () => data.sessions.find((session) => session.status === 'active' && session.planId === plan?.id),
@@ -360,7 +362,7 @@ export function WorkoutScreen({
 
   if (!plan || !day) {
     return (
-      <div className="pb-24">
+      <div className={visible ? 'pb-24' : 'hidden'}>
         <ScreenHeader title="Entrenar" subtitle="Sin plan activo" />
         <div className="px-4 pt-6 text-center"><p className="text-sm text-black/50 dark:text-white/50">Crea un plan y añade al menos un día para empezar.</p></div>
       </div>
@@ -369,7 +371,7 @@ export function WorkoutScreen({
 
   if (!activeSession) {
     return (
-      <div className="pb-28">
+      <div className={visible ? 'pb-28' : 'hidden'}>
         <ScreenHeader title="Entrenar" subtitle="Siguiente en la secuencia" />
         <div className="space-y-5 px-4 pt-5">
           <Card className="relative overflow-hidden rounded-[28px] bg-black py-6 text-white ring-0">
@@ -431,7 +433,7 @@ export function WorkoutScreen({
   if (finishMode) {
     const totalSets = activeSession.exercises.reduce((sum, exercise) => sum + exercise.sets.filter((set) => set.completed).length, 0);
     return (
-      <div className="min-h-dvh bg-black px-5 pb-8 pt-[max(2rem,env(safe-area-inset-top))] text-white">
+      <div className={visible ? 'min-h-dvh bg-black px-5 pb-8 pt-[max(2rem,env(safe-area-inset-top))] text-white' : 'hidden'}>
         <div className="mx-auto flex min-h-[80dvh] max-w-sm flex-col justify-center">
           <div className="grid size-16 place-items-center rounded-full bg-white text-black"><Trophy className="size-7" /></div>
           <p className="mt-8 text-xs font-bold uppercase tracking-[0.18em] text-white/45">Entrenamiento listo</p>
@@ -453,7 +455,8 @@ export function WorkoutScreen({
   }
 
   return (
-    <div className="pb-28">
+    <>
+      <div className={visible ? 'pb-28' : 'hidden'}>
       <header className="sticky top-0 z-30 border-b border-black/6 bg-[#f4f4f1]/94 px-4 pb-3 pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur-xl dark:border-white/8 dark:bg-[#111]/94">
         <div className="flex items-center justify-between gap-3">
           <Button aria-label="Descartar entrenamiento" variant="ghost" size="icon" className="rounded-full text-red-600" onClick={discardWorkout}><Trash2 /></Button>
@@ -534,6 +537,8 @@ export function WorkoutScreen({
         </div>
       </div>
 
+      </div>
+
       {timer > 0 ? (
         <output aria-live="polite" className="fixed inset-x-0 top-[calc(4.75rem+env(safe-area-inset-top))] z-50 mx-auto block w-[calc(100%-1.5rem)] max-w-[456px] rounded-[24px] border border-white/10 bg-black/96 p-4 text-white shadow-[0_18px_55px_rgba(0,0,0,0.42)] backdrop-blur-xl">
           <div className="flex items-center gap-3">
@@ -545,6 +550,6 @@ export function WorkoutScreen({
           <div className="mt-3 grid grid-cols-2 divide-x divide-white/10 text-xs font-bold text-white/55"><button type="button" className="py-1 text-center" onClick={() => { setTimer((current) => current + 30); setTimerRunning(true); }}>+ 30 segundos</button><button type="button" className="flex items-center justify-center gap-1.5 py-1 text-center disabled:opacity-30" disabled={!lastSetAction} onClick={undoLastSet}><RotateCcw className="size-3.5" /> Deshacer serie</button></div>
         </output>
       ) : null}
-    </div>
+    </>
   );
 }
