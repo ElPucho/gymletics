@@ -14,6 +14,7 @@ import {
   HeartPulse,
   Moon,
   Palmtree,
+  Pencil,
   Plus,
   RotateCw,
   Stethoscope,
@@ -32,9 +33,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { ManualWorkoutDialog } from './manual-workout-dialog';
+import { SessionEditorDialog } from './session-editor-dialog';
 import { ScreenHeader, SectionTitle } from './shared';
 import { formatWeight } from '@/lib/gymletics/weight-format';
 import type { CalendarStatus, GymleticsData, WorkoutSession } from '@/lib/gymletics/types';
@@ -72,11 +72,6 @@ function StatusCalendarDayButton(props: ComponentProps<typeof CalendarDayButton>
   );
 }
 
-function moveTimestampToDate(timestamp: string, date: string) {
-  const timeSeparator = timestamp.indexOf('T');
-  return timeSeparator >= 0 ? `${date}${timestamp.slice(timeSeparator)}` : `${date}T12:00:00.000Z`;
-}
-
 export function CalendarScreen({
   data,
   updateData,
@@ -87,10 +82,8 @@ export function CalendarScreen({
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [markDialogOpen, setMarkDialogOpen] = useState(false);
   const [sessionDialog, setSessionDialog] = useState<WorkoutSession | null>(null);
-  const [sessionDateDraft, setSessionDateDraft] = useState('');
-  const [sessionDateError, setSessionDateError] = useState('');
+  const [editingSession, setEditingSession] = useState<WorkoutSession | null>(null);
   const [manualDate, setManualDate] = useState<string | null>(null);
-  const todayIso = format(new Date(), 'yyyy-MM-dd');
   const iso = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : '';
   const selectedMark = data.calendarMarks.find((mark) => mark.date === iso);
   const selectedSession = data.sessions.find((session) => session.status === 'completed' && session.date === iso);
@@ -136,69 +129,10 @@ export function CalendarScreen({
 
   function openSessionDialog(session: WorkoutSession) {
     setSessionDialog(session);
-    setSessionDateDraft(session.date);
-    setSessionDateError('');
   }
 
   function closeSessionDialog() {
     setSessionDialog(null);
-    setSessionDateDraft('');
-    setSessionDateError('');
-  }
-
-  function saveSessionDate() {
-    if (!sessionDialog) return;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(sessionDateDraft)) {
-      setSessionDateError('Selecciona una fecha válida.');
-      return;
-    }
-    if (sessionDateDraft > todayIso) {
-      setSessionDateError('La fecha del entrenamiento no puede estar en el futuro.');
-      return;
-    }
-    if (sessionDateDraft === sessionDialog.date) return;
-
-    const previousDate = sessionDialog.date;
-    const updatedSession: WorkoutSession = {
-      ...sessionDialog,
-      date: sessionDateDraft,
-      startedAt: moveTimestampToDate(sessionDialog.startedAt, sessionDateDraft),
-      completedAt: sessionDialog.completedAt
-        ? moveTimestampToDate(sessionDialog.completedAt, sessionDateDraft)
-        : undefined,
-    };
-
-    updateData((current) => {
-      const previousMark = current.calendarMarks.find((mark) => mark.date === previousDate);
-      const destinationMark = current.calendarMarks.find((mark) => mark.date === sessionDateDraft);
-      const anotherCompletedSessionOnPreviousDate = current.sessions.some(
-        (session) => session.id !== sessionDialog.id && session.status === 'completed' && session.date === previousDate,
-      );
-      const calendarMarks = current.calendarMarks.filter(
-        (mark) => mark.date !== previousDate && mark.date !== sessionDateDraft,
-      );
-
-      if (anotherCompletedSessionOnPreviousDate) {
-        calendarMarks.push({ date: previousDate, status: 'completed' });
-      } else if (previousMark && previousMark.status !== 'completed') {
-        calendarMarks.push(previousMark);
-      }
-      calendarMarks.push({
-        date: sessionDateDraft,
-        status: 'completed',
-        ...(destinationMark?.note ? { note: destinationMark.note } : {}),
-      });
-
-      return {
-        ...current,
-        sessions: current.sessions.map((session) => session.id === updatedSession.id ? updatedSession : session),
-        calendarMarks,
-      };
-    });
-
-    setSessionDialog(updatedSession);
-    setSelectedDate(new Date(`${sessionDateDraft}T12:00:00`));
-    setSessionDateError('');
   }
 
   return (
@@ -245,38 +179,23 @@ export function CalendarScreen({
             <DialogTitle>{sessionDialog?.dayName}</DialogTitle>
             <DialogDescription>{sessionDialog ? `${format(new Date(`${sessionDialog.date}T12:00:00`), "d 'de' MMMM 'de' yyyy", { locale: es })} · ${sessionDialog.focus}` : ''}</DialogDescription>
           </DialogHeader>
-          <div className="rounded-[16px] border border-black/8 bg-black/3 p-3 dark:border-white/10 dark:bg-white/5">
-            <Label htmlFor="completed-session-date">Fecha del entrenamiento</Label>
-            <div className="mt-1.5 grid grid-cols-[1fr_auto] gap-2">
-              <Input
-                id="completed-session-date"
-                type="date"
-                max={todayIso}
-                value={sessionDateDraft}
-                onChange={(event) => {
-                  setSessionDateDraft(event.target.value);
-                  setSessionDateError('');
-                }}
-                className="h-10"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                className="h-10"
-                disabled={!sessionDateDraft || sessionDateDraft === sessionDialog?.date}
-                onClick={saveSessionDate}
-              >
-                Cambiar fecha
-              </Button>
-            </div>
-            {sessionDateError ? <p role="alert" className="mt-2 text-xs font-semibold text-red-600 dark:text-red-400">{sessionDateError}</p> : null}
-          </div>
           <div className="space-y-2">{sessionDialog?.exercises.map((exercise) => { const working = exercise.sets.filter((set) => set.type === 'work' && set.completed); return <div key={exercise.id} className="rounded-[16px] bg-black/4 p-3 dark:bg-white/6"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-extrabold">{exercise.exerciseName}</p><p className="mt-0.5 text-xs text-black/45 dark:text-white/45">{working.map((set) => `${formatWeight(set.weight)}×${set.reps}`).join(' · ') || 'Sin series completadas'}</p></div>{exercise.restPause && exercise.restPause.some((repetitions) => repetitions > 0) ? <Badge variant="outline">RP {exercise.restPause.map((repetitions) => repetitions || '—').join('+')}</Badge> : null}</div></div>; })}<div className="flex items-center justify-between rounded-[16px] bg-black p-3 text-white"><span className="text-sm font-extrabold">Cardio</span><span className="text-sm font-black">{sessionDialog?.cardioMinutes ?? 0} min</span></div></div>
-          <DialogFooter><Button onClick={closeSessionDialog}>Cerrar</Button></DialogFooter>
+          <DialogFooter><Button variant="outline" onClick={closeSessionDialog}>Cerrar</Button><Button onClick={() => { if (sessionDialog) setEditingSession(sessionDialog); }}><Pencil /> Editar entrenamiento</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
       {manualDate ? <ManualWorkoutDialog key={manualDate} data={data} updateData={updateData} initialDate={manualDate} onClose={() => setManualDate(null)} onSaved={openSessionDialog} /> : null}
+      {editingSession ? (
+        <SessionEditorDialog
+          key={editingSession.id}
+          data={data}
+          session={editingSession}
+          updateData={updateData}
+          onClose={() => setEditingSession(null)}
+          onSaved={(updated) => { setSessionDialog(updated); setSelectedDate(new Date(`${updated.date}T12:00:00`)); }}
+          onDeleted={() => setSessionDialog(null)}
+        />
+      ) : null}
     </div>
   );
 }

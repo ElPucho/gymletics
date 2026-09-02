@@ -73,6 +73,10 @@ export function HomeScreen({
   const weeklyVolume = weekSessions.reduce((total, session) => total + sessionVolume(session), 0);
   const targetSessions = plan?.days.length ?? 0;
   const streak = calculateStreak(data);
+  const activeSession = data.sessions.find((session) => session.status === 'active' && session.planId === plan?.id);
+  const activeWorkSets = activeSession?.exercises.flatMap((exercise) => exercise.sets.filter((set) => set.type === 'work')) ?? [];
+  const activeCompletedSets = activeWorkSets.filter((set) => set.completed).length;
+  const activeProgress = activeWorkSets.length ? Math.round((activeCompletedSets / activeWorkSets.length) * 100) : 0;
   const progressData = Array.from({ length: 6 }, (_, reverseIndex) => {
     const start = startOfWeek(subWeeks(now, 5 - reverseIndex), { weekStartsOn: 1 });
     const end = endOfWeek(start, { weekStartsOn: 1 });
@@ -117,27 +121,29 @@ export function HomeScreen({
         <div className="relative mt-9">
           <div className="mb-3 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.16em] text-white/55">
             <span className="size-1.5 rounded-full bg-white" />
-            {plan?.name ?? 'Crea tu primer plan'}
+            {activeSession?.planName ?? plan?.name ?? 'Crea tu primer plan'}
           </div>
           <h1 className="display-heading max-w-[390px] text-[48px] font-black leading-[0.92] tracking-[-0.055em]">
-            {day?.name.toLocaleUpperCase('es') ?? 'SIN PLAN'}
+            {(activeSession?.dayName ?? day?.name)?.toLocaleUpperCase('es') ?? 'SIN PLAN'}
             <span className="mt-2 block text-[30px] font-semibold tracking-[-0.035em] text-white/55">
-              {day?.focus || 'Configura tus entrenamientos'}
+              {activeSession?.focus || day?.focus || 'Configura tus entrenamientos'}
             </span>
           </h1>
 
           <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-white/65">
-            <span><strong className="text-white">{day?.exercises.length ?? 0}</strong> ejercicios</span>
-            <span><strong className="text-white">{day?.exercises.reduce((sum, item) => sum + item.sets, 0) ?? 0}</strong> series</span>
-            <span><strong className="text-white">{day?.cardioMinutes ?? 0}</strong> min cardio</span>
+            <span><strong className="text-white">{activeSession?.exercises.length ?? day?.exercises.length ?? 0}</strong> ejercicios</span>
+            <span><strong className="text-white">{activeSession ? activeWorkSets.length : day?.exercises.reduce((sum, item) => sum + item.sets, 0) ?? 0}</strong> series</span>
+            <span><strong className="text-white">{activeSession?.cardioMinutes ?? day?.cardioMinutes ?? 0}</strong> min cardio</span>
           </div>
 
+          {activeSession ? <div className="mt-5"><div className="mb-2 flex items-center justify-between text-xs font-bold text-white/55"><span>{activeCompletedSets} de {activeWorkSets.length} series</span><span>{activeProgress}%</span></div><div className="h-1.5 overflow-hidden rounded-full bg-white/15"><div className="h-full rounded-full bg-white transition-[width]" style={{ width: `${activeProgress}%` }} /></div></div> : null}
+
           <Button
-            className="mt-7 h-13 w-full rounded-full bg-white px-5 text-[15px] font-bold text-black hover:bg-white/90"
+            className={`${activeSession ? 'mt-5' : 'mt-7'} h-13 w-full rounded-full bg-white px-5 text-[15px] font-bold text-black hover:bg-white/90`}
             onClick={onStart}
-            disabled={!day || !day.exercises.length}
+            disabled={!activeSession && (!day || !day.exercises.length)}
           >
-            Iniciar entrenamiento
+            {activeSession ? 'Continuar entrenamiento' : 'Iniciar entrenamiento'}
             <ArrowRight className="ml-auto size-5" />
           </Button>
         </div>
