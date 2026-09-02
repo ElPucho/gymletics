@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Circle,
   Flame,
+  GripHorizontal,
   History,
   Pause,
   Play,
@@ -94,6 +95,9 @@ export function WorkoutScreen({
   const [finishMode, setFinishMode] = useState(false);
   const [lastSetAction, setLastSetAction] = useState<{ setId: string; completed: boolean } | null>(null);
   const wakeLock = useRef<{ release: () => Promise<void> } | null>(null);
+  const timerElement = useRef<HTMLOutputElement | null>(null);
+  const timerDrag = useRef<{ pointerId: number; offsetX: number; offsetY: number } | null>(null);
+  const [timerPosition, setTimerPosition] = useState<{ x: number; y: number } | null>(null);
 
   const exerciseLibrary = useMemo(() => {
     const unique = new Map<string, RoutineDay['exercises'][number]>();
@@ -153,6 +157,22 @@ export function WorkoutScreen({
     }, 1000);
     return () => window.clearInterval(interval);
   }, [data.settings.vibration, timer, timerRunning]);
+
+  useEffect(() => {
+    function keepTimerInBounds() {
+      setTimerPosition((current) => {
+        const element = timerElement.current;
+        if (!current || !element) return current;
+        const margin = 8;
+        return {
+          x: Math.min(Math.max(margin, current.x), Math.max(margin, window.innerWidth - element.offsetWidth - margin)),
+          y: Math.min(Math.max(margin, current.y), Math.max(margin, window.innerHeight - element.offsetHeight - margin)),
+        };
+      });
+    }
+    window.addEventListener('resize', keepTimerInBounds);
+    return () => window.removeEventListener('resize', keepTimerInBounds);
+  }, []);
 
   const activeSessionId = activeSession?.id;
   useEffect(() => {
@@ -360,6 +380,57 @@ export function WorkoutScreen({
     setFinishMode(false);
   }
 
+  function boundedTimerPosition(x: number, y: number) {
+    const element = timerElement.current;
+    if (!element) return { x, y };
+    const margin = 8;
+    return {
+      x: Math.min(Math.max(margin, x), Math.max(margin, window.innerWidth - element.offsetWidth - margin)),
+      y: Math.min(Math.max(margin, y), Math.max(margin, window.innerHeight - element.offsetHeight - margin)),
+    };
+  }
+
+  function startTimerDrag(event: React.PointerEvent<HTMLButtonElement>) {
+    const element = timerElement.current;
+    if (!element) return;
+    const rect = element.getBoundingClientRect();
+    timerDrag.current = {
+      pointerId: event.pointerId,
+      offsetX: event.clientX - rect.left,
+      offsetY: event.clientY - rect.top,
+    };
+    setTimerPosition({ x: rect.left, y: rect.top });
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function moveTimer(event: React.PointerEvent<HTMLButtonElement>) {
+    const drag = timerDrag.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    setTimerPosition(boundedTimerPosition(event.clientX - drag.offsetX, event.clientY - drag.offsetY));
+  }
+
+  function stopTimerDrag(event: React.PointerEvent<HTMLButtonElement>) {
+    if (timerDrag.current?.pointerId !== event.pointerId) return;
+    timerDrag.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  }
+
+  function moveTimerWithKeyboard(event: React.KeyboardEvent<HTMLButtonElement>) {
+    const directions: Record<string, [number, number]> = {
+      ArrowLeft: [-1, 0],
+      ArrowRight: [1, 0],
+      ArrowUp: [0, -1],
+      ArrowDown: [0, 1],
+    };
+    const direction = directions[event.key];
+    if (!direction || !timerElement.current) return;
+    event.preventDefault();
+    const rect = timerElement.current.getBoundingClientRect();
+    const distance = event.shiftKey ? 24 : 8;
+    setTimerPosition(boundedTimerPosition(rect.left + direction[0] * distance, rect.top + direction[1] * distance));
+  }
+
   if (!plan || !day) {
     return (
       <div className={visible ? 'pb-24' : 'hidden'}>
@@ -540,7 +611,24 @@ export function WorkoutScreen({
       </div>
 
       {timer > 0 ? (
-        <output aria-live="polite" className="fixed inset-x-0 top-[calc(4.75rem+env(safe-area-inset-top))] z-50 mx-auto block w-[calc(100%-1.5rem)] max-w-[456px] rounded-[24px] border border-white/10 bg-black/96 p-4 text-white shadow-[0_18px_55px_rgba(0,0,0,0.42)] backdrop-blur-xl">
+        <output
+          ref={timerElement}
+          aria-live="polite"
+          className={`fixed z-50 block w-[calc(100%-1.5rem)] max-w-[456px] rounded-[24px] border border-white/10 bg-black/96 p-4 pt-2 text-white shadow-[0_18px_55px_rgba(0,0,0,0.42)] backdrop-blur-xl ${timerPosition ? '' : 'inset-x-0 top-[calc(4.75rem+env(safe-area-inset-top))] mx-auto'}`}
+          style={timerPosition ? { left: timerPosition.x, top: timerPosition.y } : undefined}
+        >
+          <button
+            type="button"
+            aria-label="Mover temporizador"
+            className="mb-1 flex w-full touch-none cursor-grab select-none items-center justify-center gap-1 rounded-full py-1 text-[10px] font-bold uppercase tracking-wider text-white/35 active:cursor-grabbing active:text-white/65"
+            onPointerDown={startTimerDrag}
+            onPointerMove={moveTimer}
+            onPointerUp={stopTimerDrag}
+            onPointerCancel={stopTimerDrag}
+            onKeyDown={moveTimerWithKeyboard}
+          >
+            <GripHorizontal className="size-4" /> Arrastra para mover
+          </button>
           <div className="flex items-center gap-3">
             <div className="grid size-14 shrink-0 place-items-center rounded-full bg-white text-xl font-black text-black tabular-nums">{Math.floor(timer / 60)}:{String(timer % 60).padStart(2, '0')}</div>
             <div className="min-w-0 flex-1"><p className="text-sm font-extrabold">{timerMode === 'rest-pause' ? 'Descanso rest-pause' : 'Descanso'}</p><p className="truncate text-xs text-white/45">{timerMode === 'rest-pause' ? '10 segundos antes del siguiente bloque' : 'Respira y prepara la siguiente serie'}</p></div>
