@@ -10,6 +10,7 @@ import {
   ChartNoAxesColumnIncreasing,
   Dumbbell,
   Images,
+  Layers3,
   Plus,
   Scale,
   Target,
@@ -61,6 +62,7 @@ const adherenceChart = {
 } satisfies ChartConfig;
 
 type RangeMode = 'week' | 'month' | 'year' | 'custom';
+type ExerciseScope = 'active-plan' | 'history';
 
 function startForRange(mode: RangeMode, customStart: string) {
   const now = new Date();
@@ -106,13 +108,22 @@ export function ProgressScreen({
   const [range, setRange] = useState<RangeMode>('month');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
-  const exerciseNames = useMemo(() => {
+  const [exerciseScope, setExerciseScope] = useState<ExerciseScope>('active-plan');
+  const activePlan = data.plans.find((plan) => plan.id === data.activePlanId) ?? data.plans[0];
+  const activeExerciseNames = useMemo(() => {
+    const names = new Set<string>();
+    activePlan?.days.forEach((day) => day.exercises.forEach((exercise) => names.add(exercise.name)));
+    return [...names].sort((a, b) => a.localeCompare(b, 'es'));
+  }, [activePlan]);
+  const historicalExerciseNames = useMemo(() => {
     const names = new Set<string>();
     data.plans.forEach((plan) => plan.days.forEach((day) => day.exercises.forEach((exercise) => names.add(exercise.name))));
     data.sessions.forEach((session) => session.exercises.forEach((exercise) => names.add(exercise.exerciseName)));
     return [...names].sort((a, b) => a.localeCompare(b, 'es'));
   }, [data.plans, data.sessions]);
+  const exerciseNames = exerciseScope === 'active-plan' ? activeExerciseNames : historicalExerciseNames;
   const [selectedExercise, setSelectedExercise] = useState(exerciseNames[0] ?? '');
+  const displayedExercise = exerciseNames.includes(selectedExercise) ? selectedExercise : exerciseNames[0] ?? '';
   const [metricDialogOpen, setMetricDialogOpen] = useState(false);
   const [metricDate, setMetricDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [metricWeight, setMetricWeight] = useState<number | null>(null);
@@ -137,7 +148,7 @@ export function ProgressScreen({
       filteredSessions
         .flatMap((session) =>
           session.exercises
-            .filter((exercise) => exercise.exerciseName === selectedExercise)
+            .filter((exercise) => exercise.exerciseName === displayedExercise)
             .map((exercise) => {
               const sets = exercise.sets.filter((set) => set.completed && set.type === 'work');
               const best = sets.reduce((current, set) =>
@@ -154,7 +165,7 @@ export function ProgressScreen({
             }),
         )
         .sort((a, b) => a.date.localeCompare(b.date)),
-    [filteredSessions, selectedExercise],
+    [displayedExercise, filteredSessions],
   );
 
   const bodyData = [...data.bodyMetrics]
@@ -241,12 +252,20 @@ export function ProgressScreen({
               </div>
             ) : null}
 
-            <Select value={selectedExercise} onValueChange={(value) => setSelectedExercise(value ?? '')}>
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 rounded-full bg-black/6 p-1 dark:bg-white/8">
+                <button type="button" aria-pressed={exerciseScope === 'active-plan'} onClick={() => setExerciseScope('active-plan')} className={`h-9 rounded-full text-xs font-bold transition ${exerciseScope === 'active-plan' ? 'bg-black text-white shadow-sm dark:bg-white dark:text-black' : 'text-black/50 dark:text-white/50'}`}>Plan actual</button>
+                <button type="button" aria-pressed={exerciseScope === 'history'} onClick={() => setExerciseScope('history')} className={`h-9 rounded-full text-xs font-bold transition ${exerciseScope === 'history' ? 'bg-black text-white shadow-sm dark:bg-white dark:text-black' : 'text-black/50 dark:text-white/50'}`}>Todo el histórico</button>
+              </div>
+              <div className="flex items-center gap-2 px-1 text-xs text-black/45 dark:text-white/45"><Layers3 className="size-3.5 shrink-0" /><p className="min-w-0 truncate">{exerciseScope === 'active-plan' ? `${activePlan?.name ?? 'Sin plan activo'} · ${activeExerciseNames.length} ejercicios` : `${historicalExerciseNames.length} ejercicios guardados`}</p></div>
+            </div>
+
+            <Select value={displayedExercise} onValueChange={(value) => setSelectedExercise(value ?? '')}>
               <SelectTrigger className="h-12 w-full rounded-[16px] bg-white px-4 font-bold dark:bg-[#1c1c1c]"><SelectValue placeholder="Selecciona un ejercicio" /></SelectTrigger>
               <SelectContent>{exerciseNames.map((name) => <SelectItem key={name} value={name}>{name}</SelectItem>)}</SelectContent>
             </Select>
 
-            {exerciseData.length ? (
+            {!exerciseNames.length ? <EmptyState icon={Dumbbell} title="Este plan no tiene ejercicios" description="Añade ejercicios al plan activo para verlos aquí." /> : exerciseData.length ? (
               <>
                 <section className="grid grid-cols-3 gap-2">
                   <Stat icon={Dumbbell} label="Carga máx." value={`${formatWeight(Math.max(...exerciseData.map((item) => item.weight)))} kg`} />
