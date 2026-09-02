@@ -87,6 +87,7 @@ export function WorkoutScreen({
   const [exerciseIndex, setExerciseIndex] = useState(() => (activeSession ? firstIncompleteExercise(activeSession) : 0));
   const [timer, setTimer] = useState(0);
   const [timerRunning, setTimerRunning] = useState(false);
+  const [timerMode, setTimerMode] = useState<'normal' | 'rest-pause'>('normal');
   const [cardioMinutes, setCardioMinutes] = useState(day?.cardioMinutes ?? 0);
   const [finishMode, setFinishMode] = useState(false);
   const [lastSetAction, setLastSetAction] = useState<{ setId: string; completed: boolean } | null>(null);
@@ -191,7 +192,13 @@ export function WorkoutScreen({
     setLastSetAction({ setId: set.id, completed: set.completed });
     updateSet(set.id, { completed: !set.completed });
     if (!set.completed) {
-      const restSeconds = selectedPlanExercise?.restSeconds ?? 60;
+      const finishesWorkSets = set.type === 'work' && Boolean(selectedLog?.sets
+        .filter((item) => item.type === 'work')
+        .every((item) => item.id === set.id || item.completed));
+      const startsRestPause = finishesWorkSets
+        && (selectedPlanExercise?.technique ?? selectedLog?.technique) === 'rest-pause';
+      const restSeconds = startsRestPause ? 10 : selectedPlanExercise?.restSeconds ?? 60;
+      setTimerMode(startsRestPause ? 'rest-pause' : 'normal');
       setTimer(restSeconds);
       setTimerRunning(restSeconds > 0);
     }
@@ -283,6 +290,9 @@ export function WorkoutScreen({
   }
 
   function setRestPause(position: 0 | 1, value: number | null) {
+    const startsSecondBlock = position === 0
+      && (selectedLog?.restPause?.[0] ?? 0) === 0
+      && (value ?? 0) > 0;
     updateSession((session) => ({
       ...session,
       exercises: session.exercises.map((exercise, index) => {
@@ -297,6 +307,11 @@ export function WorkoutScreen({
         return { ...exercise, restPause: next };
       }),
     }));
+    if (startsSecondBlock) {
+      setTimerMode('rest-pause');
+      setTimer(10);
+      setTimerRunning(true);
+    }
   }
 
   function goNext() {
@@ -520,10 +535,10 @@ export function WorkoutScreen({
       </div>
 
       {timer > 0 ? (
-        <output aria-live="polite" className="fixed inset-x-0 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-50 mx-auto block w-[calc(100%-1.5rem)] max-w-[456px] rounded-[24px] border border-white/10 bg-black/96 p-4 text-white shadow-[0_18px_55px_rgba(0,0,0,0.42)] backdrop-blur-xl">
+        <output aria-live="polite" className="fixed inset-x-0 top-[calc(4.75rem+env(safe-area-inset-top))] z-50 mx-auto block w-[calc(100%-1.5rem)] max-w-[456px] rounded-[24px] border border-white/10 bg-black/96 p-4 text-white shadow-[0_18px_55px_rgba(0,0,0,0.42)] backdrop-blur-xl">
           <div className="flex items-center gap-3">
             <div className="grid size-14 shrink-0 place-items-center rounded-full bg-white text-xl font-black text-black tabular-nums">{Math.floor(timer / 60)}:{String(timer % 60).padStart(2, '0')}</div>
-            <div className="min-w-0 flex-1"><p className="text-sm font-extrabold">Descanso</p><p className="truncate text-xs text-white/45">Respira y prepara la siguiente serie</p></div>
+            <div className="min-w-0 flex-1"><p className="text-sm font-extrabold">{timerMode === 'rest-pause' ? 'Descanso rest-pause' : 'Descanso'}</p><p className="truncate text-xs text-white/45">{timerMode === 'rest-pause' ? '10 segundos antes del siguiente bloque' : 'Respira y prepara la siguiente serie'}</p></div>
             <Button aria-label={timerRunning ? 'Pausar temporizador' : 'Continuar temporizador'} variant="outline" size="icon" className="rounded-full border-white/15 bg-white/10 text-white hover:bg-white/20" onClick={() => setTimerRunning((current) => !current)}>{timerRunning ? <Pause /> : <Play />}</Button>
             <Button aria-label="Saltar descanso" variant="outline" size="icon" className="rounded-full border-white/15 bg-white/10 text-white hover:bg-white/20" onClick={() => { setTimer(0); setTimerRunning(false); }}><SkipForward /></Button>
           </div>
