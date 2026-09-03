@@ -27,6 +27,7 @@ export interface ExerciseDefinition {
   unit: WeightUnit;
   mediaDataUrl?: string;
   mediaFileName?: string;
+  archivedAt?: string;
   createdAt: string;
   updatedAt: string;
 }

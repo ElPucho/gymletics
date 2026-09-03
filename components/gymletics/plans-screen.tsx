@@ -338,7 +338,10 @@ export function PlansScreen({
       return;
     }
     updateData((current) => {
-      const definition = current.exerciseLibrary.find((item) => exerciseIdentityKey(item) === candidateKey) ?? candidate;
+      const storedDefinition = current.exerciseLibrary.find((item) => exerciseIdentityKey(item) === candidateKey);
+      const definition = storedDefinition?.archivedAt
+        ? { ...storedDefinition, archivedAt: undefined, updatedAt: new Date().toISOString() }
+        : storedDefinition ?? candidate;
       const normalized: PlanExercise = {
         ...exerciseDraft,
         libraryExerciseId: definition.id,
@@ -357,7 +360,7 @@ export function PlansScreen({
       return {
         ...current,
         exerciseLibrary: current.exerciseLibrary.some((item) => item.id === definition.id)
-          ? current.exerciseLibrary
+          ? current.exerciseLibrary.map((item) => item.id === definition.id ? definition : item)
           : [...current.exerciseLibrary, definition].sort((a, b) => exerciseDefinitionLabel(a).localeCompare(exerciseDefinitionLabel(b), 'es')),
         plans: current.plans.map((item) => item.id === plan?.id ? {
           ...item,
@@ -572,7 +575,7 @@ export function PlansScreen({
               if (!definition) return;
               setExerciseDraft((current) => ({ ...current, libraryExerciseId: definition.id, name: definition.name, variant: definition.variant, equipment: definition.equipment, muscleGroup: definition.muscleGroup, unit: definition.unit }));
               setExerciseError('');
-            }}><SelectTrigger className="mt-1 h-11 w-full"><SelectValue placeholder="Selecciona un ejercicio" /></SelectTrigger><SelectContent><SelectItem value="__new__">Crear definición nueva</SelectItem>{data.exerciseLibrary.map((exercise) => <SelectItem key={exercise.id} value={exercise.id}>{exerciseDefinitionLabel(exercise)} · {exercise.equipment} · {exercise.unit}</SelectItem>)}</SelectContent></Select></div>
+            }}><SelectTrigger className="mt-1 h-11 w-full"><SelectValue placeholder="Selecciona un ejercicio" /></SelectTrigger><SelectContent><SelectItem value="__new__">Crear definición nueva</SelectItem>{data.exerciseLibrary.filter((exercise) => !exercise.archivedAt).map((exercise) => <SelectItem key={exercise.id} value={exercise.id}>{exerciseDefinitionLabel(exercise)} · {exercise.equipment} · {exercise.unit}</SelectItem>)}</SelectContent></Select></div>
             <div><Label htmlFor="exercise-name">Nombre</Label><Input id="exercise-name" className="mt-1 h-10" value={exerciseDraft.name} onChange={(event) => setExerciseDraft((current) => ({ ...current, name: event.target.value }))} placeholder="Press inclinado con barra" /></div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label htmlFor="exercise-variant">Variante</Label><Input id="exercise-variant" className="mt-1 h-10" value={exerciseDraft.variant ?? ''} onChange={(event) => setExerciseDraft((current) => ({ ...current, variant: event.target.value }))} placeholder="Agarre neutro" /></div>

@@ -20,7 +20,7 @@ import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
+import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -44,6 +44,17 @@ const performanceChart = {
   weight: { label: 'Peso', theme: { light: '#111111', dark: '#f5f5f5' } },
   reps: { label: 'Repeticiones', theme: { light: '#8a8a8a', dark: '#8a8a8a' } },
 } satisfies ChartConfig;
+
+const dayLineThemes = [
+  { light: '#111111', dark: '#f5f5f5' },
+  { light: '#2563eb', dark: '#60a5fa' },
+  { light: '#dc2626', dark: '#f87171' },
+  { light: '#16a34a', dark: '#4ade80' },
+  { light: '#9333ea', dark: '#c084fc' },
+  { light: '#ea580c', dark: '#fb923c' },
+  { light: '#0891b2', dark: '#22d3ee' },
+  { light: '#ca8a04', dark: '#facc15' },
+];
 
 type RangeMode = 'week' | 'month' | 'year' | 'custom';
 type StrengthView = 'day' | 'exercise';
@@ -216,30 +227,59 @@ function DayComparison({
 }) {
   if (!days.length) return <EmptyState icon={Layers3} title="El plan no tiene días" description="Añade un día y sus ejercicios para crear la comparación." />;
   const selectedDay = days.find((day) => day.id === selectedDayId) ?? days[0];
+  const chartRows = dayExercises.map(({ exercise, definition }, index) => ({
+    key: `exercise_${index}`,
+    exercise,
+    definition,
+    label: definition ? exerciseDefinitionLabel(definition) : exercise.name,
+    unit: definition?.unit ?? exercise.unit,
+  }));
+  const dayChartConfig = Object.fromEntries(chartRows.map((row, index) => [
+    row.key,
+    { label: row.label, theme: dayLineThemes[index % dayLineThemes.length] },
+  ])) as ChartConfig;
+  const dayChartData = sessions.map((session) => {
+    const point: Record<string, string | number | null> = {
+      label: format(new Date(`${session.date}T12:00:00`), 'dd/MM'),
+    };
+    for (const row of chartRows) {
+      const log = session.exercises.find((item) => row.definition
+        ? exerciseLogMatchesDefinition(item, row.definition)
+        : item.planExerciseId === row.exercise.id);
+      point[row.key] = log ? exercisePerformancePoint(session, log)?.e1rm ?? null : null;
+    }
+    return point;
+  });
   return (
     <div className="space-y-4">
       <div><Label>Día de entrenamiento</Label><Select value={selectedDay.id} onValueChange={(value) => onDayChange(value ?? '')}><SelectTrigger className="mt-1 h-12 w-full rounded-[16px] bg-white px-4 font-bold dark:bg-[#1c1c1c]"><SelectValue placeholder="Selecciona un día">{selectedDay.name} · {selectedDay.focus || 'Entrenamiento'}</SelectValue></SelectTrigger><SelectContent>{days.map((day) => <SelectItem key={day.id} value={day.id}>{day.name} · {day.focus || 'Entrenamiento'}</SelectItem>)}</SelectContent></Select><p className="mt-2 flex items-center gap-2 px-1 text-xs text-black/45 dark:text-white/45"><Layers3 className="size-3.5" />Comparando {selectedDay.name} · {planName} · {sessions.length} sesiones</p></div>
 
       {!sessions.length ? <EmptyState icon={ChartNoAxesColumnIncreasing} title="No hay sesiones en este periodo" description="Completa este día o amplía el rango para comparar todos sus ejercicios." /> : (
-        <Card className="overflow-hidden rounded-[24px] bg-white py-0 ring-black/6 dark:bg-[#1c1c1c] dark:ring-white/10">
-          <CardContent className="px-0 py-0">
-            <div className="border-b border-black/6 px-4 py-3 dark:border-white/8"><p className="text-sm font-extrabold">Evolución conjunta</p><p className="mt-0.5 text-xs text-black/45 dark:text-white/45">Mejor serie de cada ejercicio en las últimas 8 sesiones del periodo.</p></div>
-            <div className="overflow-x-auto">
-              <table className="min-w-max border-collapse text-left text-xs">
-                <thead><tr className="border-b border-black/6 text-[10px] font-bold uppercase tracking-wider text-black/40 dark:border-white/8 dark:text-white/40"><th className="sticky left-0 z-10 min-w-40 bg-white px-4 py-3 dark:bg-[#1c1c1c]">Ejercicio</th>{sessions.map((session) => <th key={session.id} className="min-w-20 px-3 py-3 text-center">{format(new Date(`${session.date}T12:00:00`), 'dd/MM')}</th>)}<th className="min-w-24 px-3 py-3 text-center">Δ 1RM</th></tr></thead>
-                <tbody>{dayExercises.map(({ exercise, definition }) => {
-                  const points = sessions.map((session) => {
-                    const log = session.exercises.find((item) => definition ? exerciseLogMatchesDefinition(item, definition) : item.planExerciseId === exercise.id);
-                    return log ? exercisePerformancePoint(session, log) : null;
-                  });
-                  const available = points.filter((point): point is ExercisePerformancePoint => Boolean(point));
-                  const delta = available.length > 1 ? (available.at(-1)?.e1rm ?? 0) - available[0].e1rm : 0;
-                  return <tr key={definition?.id ?? exercise.id} className="border-b border-black/5 last:border-0 dark:border-white/6"><th className="sticky left-0 z-10 max-w-40 bg-white px-4 py-3 align-top dark:bg-[#1c1c1c]"><p className="max-w-36 truncate font-extrabold">{definition ? exerciseDefinitionLabel(definition) : exercise.name}</p><p className="mt-0.5 max-w-36 truncate text-[10px] font-medium text-black/40 dark:text-white/40">{definition?.equipment ?? exercise.equipment} · {definition?.unit ?? exercise.unit}</p></th>{points.map((point, index) => <td key={sessions[index].id} className="px-3 py-3 text-center">{point ? <><p className="font-black">{formatWeight(point.weight)}</p><p className="text-[10px] text-black/40 dark:text-white/40">× {point.reps}</p></> : <span className="text-black/20 dark:text-white/20">—</span>}</td>)}<td className="px-3 py-3 text-center">{available.length > 1 ? <Badge variant="outline" className={delta > 0 ? 'text-emerald-600' : delta < 0 ? 'text-red-600' : ''}>{delta > 0 ? <ArrowUpRight /> : delta < 0 ? <ArrowDownRight /> : <Repeat2 />}{formatWeight(Math.abs(delta))}</Badge> : <span className="text-black/25 dark:text-white/25">—</span>}</td></tr>;
-                })}</tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+        <>
+          <Card className="rounded-[24px] bg-white py-4 ring-black/6 dark:bg-[#1c1c1c] dark:ring-white/10">
+            <CardContent className="px-2"><div className="px-3"><p className="text-sm font-extrabold">Gráfica de todos los ejercicios</p><p className="mt-0.5 text-xs text-black/45 dark:text-white/45">Cada línea representa la evolución del 1RM estimado.</p></div><ChartContainer config={dayChartConfig} className="mt-2 h-[280px] w-full"><LineChart data={dayChartData} margin={{ left: 0, right: 12, top: 12, bottom: 4 }}><CartesianGrid vertical={false} strokeDasharray="3 5" /><XAxis dataKey="label" tickLine={false} axisLine={false} /><YAxis hide domain={['auto', 'auto']} /><ChartTooltip content={<ChartTooltipContent valueFormatter={(value, name) => { const row = chartRows.find((item) => item.key === String(name)); return typeof value === 'number' ? `${formatWeight(value)} ${row?.unit ?? ''}` : String(value); }} />} /><ChartLegend content={<ChartLegendContent className="flex-wrap gap-x-3 gap-y-1 text-[10px]" />} />{chartRows.map((row) => <Line key={row.key} dataKey={row.key} type="monotone" stroke={`var(--color-${row.key})`} strokeWidth={2.5} dot={{ r: 2.5 }} connectNulls />)}</LineChart></ChartContainer></CardContent>
+          </Card>
+
+          <Card className="overflow-hidden rounded-[24px] bg-white py-0 ring-black/6 dark:bg-[#1c1c1c] dark:ring-white/10">
+            <CardContent className="px-0 py-0">
+              <div className="border-b border-black/6 px-4 py-3 dark:border-white/8"><p className="text-sm font-extrabold">Evolución conjunta</p><p className="mt-0.5 text-xs text-black/45 dark:text-white/45">Mejor serie de cada ejercicio en las últimas 8 sesiones del periodo.</p></div>
+              <div className="overflow-x-auto">
+                <table className="min-w-max border-collapse text-left text-xs">
+                  <thead><tr className="border-b border-black/6 text-[10px] font-bold uppercase tracking-wider text-black/40 dark:border-white/8 dark:text-white/40"><th className="sticky left-0 z-10 min-w-40 bg-white px-4 py-3 dark:bg-[#1c1c1c]">Ejercicio</th>{sessions.map((session) => <th key={session.id} className="min-w-20 px-3 py-3 text-center">{format(new Date(`${session.date}T12:00:00`), 'dd/MM')}</th>)}<th className="min-w-24 px-3 py-3 text-center">Δ 1RM</th></tr></thead>
+                  <tbody>{dayExercises.map(({ exercise, definition }) => {
+                    const points = sessions.map((session) => {
+                      const log = session.exercises.find((item) => definition ? exerciseLogMatchesDefinition(item, definition) : item.planExerciseId === exercise.id);
+                      return log ? exercisePerformancePoint(session, log) : null;
+                    });
+                    const available = points.filter((point): point is ExercisePerformancePoint => Boolean(point));
+                    const delta = available.length > 1 ? (available.at(-1)?.e1rm ?? 0) - available[0].e1rm : 0;
+                    return <tr key={definition?.id ?? exercise.id} className="border-b border-black/5 last:border-0 dark:border-white/6"><th className="sticky left-0 z-10 max-w-40 bg-white px-4 py-3 align-top dark:bg-[#1c1c1c]"><p className="max-w-36 truncate font-extrabold">{definition ? exerciseDefinitionLabel(definition) : exercise.name}</p><p className="mt-0.5 max-w-36 truncate text-[10px] font-medium text-black/40 dark:text-white/40">{definition?.equipment ?? exercise.equipment} · {definition?.unit ?? exercise.unit}</p></th>{points.map((point, index) => <td key={sessions[index].id} className="px-3 py-3 text-center">{point ? <><p className="font-black">{formatWeight(point.weight)}</p><p className="text-[10px] text-black/40 dark:text-white/40">× {point.reps}</p></> : <span className="text-black/20 dark:text-white/20">—</span>}</td>)}<td className="px-3 py-3 text-center">{available.length > 1 ? <Badge variant="outline" className={delta > 0 ? 'text-emerald-600' : delta < 0 ? 'text-red-600' : ''}>{delta > 0 ? <ArrowUpRight /> : delta < 0 ? <ArrowDownRight /> : <Repeat2 />}{formatWeight(Math.abs(delta))}</Badge> : <span className="text-black/25 dark:text-white/25">—</span>}</td></tr>;
+                  })}</tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </>
       )}
     </div>
   );
