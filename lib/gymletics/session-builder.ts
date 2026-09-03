@@ -36,7 +36,10 @@ export function buildExerciseLog(
   return {
     id: uid('log'),
     planExerciseId: exercise.id,
+    libraryExerciseId: exercise.libraryExerciseId,
     exerciseName: exercise.name,
+    variant: exercise.variant,
+    equipment: exercise.equipment,
     muscleGroup: exercise.muscleGroup,
     unit: exercise.unit,
     targetSets: exercise.sets,

@@ -24,7 +24,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { ScreenHeader, SectionTitle } from './shared';
-import { isGymleticsData } from '@/lib/gymletics/db';
+import { isGymleticsData, migrateGymleticsData } from '@/lib/gymletics/db';
+import { reconcileExerciseLibrary } from '@/lib/gymletics/exercise-library';
 import { exportBackup, exportCsv, exportExcel, exportPdf, importWorkbook } from '@/lib/gymletics/io';
 import type { GymleticsData } from '@/lib/gymletics/types';
 
@@ -59,7 +60,7 @@ export function SettingsScreen({
       const sessions = await importWorkbook(file, data.activePlanId);
       const existing = new Set(data.sessions.map((session) => `${session.date}|${session.dayName}|${session.exercises.length}`));
       const fresh = sessions.filter((session) => !existing.has(`${session.date}|${session.dayName}|${session.exercises.length}`));
-      updateData((current) => ({
+      updateData((current) => reconcileExerciseLibrary({
         ...current,
         sessions: [...fresh, ...current.sessions].sort((a, b) => b.date.localeCompare(a.date)),
         calendarMarks: [
@@ -84,7 +85,7 @@ export function SettingsScreen({
       const candidate = parsed && typeof parsed === 'object' && 'data' in parsed ? (parsed as { data: unknown }).data : parsed;
       if (!isGymleticsData(candidate)) throw new Error('La copia no contiene datos válidos de Gymletics.');
       if (!window.confirm('La restauración sustituirá los datos actuales de este dispositivo. ¿Continuar?')) return;
-      updateData(candidate);
+      updateData(migrateGymleticsData(candidate));
       setStatus('Copia restaurada correctamente.');
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'No se pudo restaurar la copia.');

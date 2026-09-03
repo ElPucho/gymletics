@@ -1,25 +1,18 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { format, startOfMonth, startOfWeek, startOfYear, subDays } from 'date-fns';
+import { useState } from 'react';
+import { format } from 'date-fns';
 import {
-  ArrowDownRight,
-  ArrowUpRight,
   Camera,
-  CalendarDays,
-  ChartNoAxesColumnIncreasing,
   Dumbbell,
   Images,
-  Layers3,
   Plus,
   Scale,
   Target,
   Trash2,
-  Trophy,
 } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
 
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -42,15 +35,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DecimalWeightInput } from './decimal-weight-input';
 import { EmptyState, ScreenHeader } from './shared';
+import { StrengthProgress } from './strength-progress';
 import { uid } from '@/lib/gymletics/defaults';
-import { estimatedOneRepMax } from '@/lib/gymletics/progression';
 import { formatWeight } from '@/lib/gymletics/weight-format';
-import type { GymleticsData, PhotoPose, ProgressPhoto, WorkoutSession } from '@/lib/gymletics/types';
-
-const weightChart = {
-  weight: { label: 'Peso', theme: { light: '#111111', dark: '#f5f5f5' } },
-  e1rm: { label: '1RM estimado', theme: { light: '#777777', dark: '#a3a3a3' } },
-} satisfies ChartConfig;
+import type { GymleticsData, PhotoPose, ProgressPhoto } from '@/lib/gymletics/types';
 const bodyChart = {
   weight: { label: 'Peso', theme: { light: '#111111', dark: '#f5f5f5' } },
   fat: { label: '% grasa', theme: { light: '#777777', dark: '#a3a3a3' } },
@@ -60,21 +48,6 @@ const adherenceChart = {
   completed: { label: 'Completados', theme: { light: '#111111', dark: '#f5f5f5' } },
   missed: { label: 'Incumplidos', theme: { light: '#c8c8c8', dark: '#575757' } },
 } satisfies ChartConfig;
-
-type RangeMode = 'week' | 'month' | 'year' | 'custom';
-type ExerciseScope = 'active-plan' | 'history';
-
-function startForRange(mode: RangeMode, customStart: string) {
-  const now = new Date();
-  if (mode === 'week') return startOfWeek(now, { weekStartsOn: 1 });
-  if (mode === 'month') return startOfMonth(now);
-  if (mode === 'year') return startOfYear(now);
-  return customStart ? new Date(`${customStart}T00:00:00`) : subDays(now, 30);
-}
-
-function sessionDate(session: WorkoutSession) {
-  return new Date(`${session.date}T12:00:00`);
-}
 
 async function compressImage(file: File): Promise<string> {
   const source = await new Promise<string>((resolve, reject) => {
@@ -105,25 +78,6 @@ export function ProgressScreen({
   data: GymleticsData;
   updateData: (updater: (current: GymleticsData) => GymleticsData) => void;
 }) {
-  const [range, setRange] = useState<RangeMode>('month');
-  const [customStart, setCustomStart] = useState('');
-  const [customEnd, setCustomEnd] = useState('');
-  const [exerciseScope, setExerciseScope] = useState<ExerciseScope>('active-plan');
-  const activePlan = data.plans.find((plan) => plan.id === data.activePlanId) ?? data.plans[0];
-  const activeExerciseNames = useMemo(() => {
-    const names = new Set<string>();
-    activePlan?.days.forEach((day) => day.exercises.forEach((exercise) => names.add(exercise.name)));
-    return [...names].sort((a, b) => a.localeCompare(b, 'es'));
-  }, [activePlan]);
-  const historicalExerciseNames = useMemo(() => {
-    const names = new Set<string>();
-    data.plans.forEach((plan) => plan.days.forEach((day) => day.exercises.forEach((exercise) => names.add(exercise.name))));
-    data.sessions.forEach((session) => session.exercises.forEach((exercise) => names.add(exercise.exerciseName)));
-    return [...names].sort((a, b) => a.localeCompare(b, 'es'));
-  }, [data.plans, data.sessions]);
-  const exerciseNames = exerciseScope === 'active-plan' ? activeExerciseNames : historicalExerciseNames;
-  const [selectedExercise, setSelectedExercise] = useState(exerciseNames[0] ?? '');
-  const displayedExercise = exerciseNames.includes(selectedExercise) ? selectedExercise : exerciseNames[0] ?? '';
   const [metricDialogOpen, setMetricDialogOpen] = useState(false);
   const [metricDate, setMetricDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [metricWeight, setMetricWeight] = useState<number | null>(null);
@@ -136,37 +90,6 @@ export function ProgressScreen({
   const [photoBusy, setPhotoBusy] = useState(false);
   const [compareA, setCompareA] = useState('');
   const [compareB, setCompareB] = useState('');
-
-  const filteredSessions = useMemo(() => {
-    const start = startForRange(range, customStart);
-    const end = range === 'custom' && customEnd ? new Date(`${customEnd}T23:59:59`) : new Date();
-    return data.sessions.filter((session) => session.status === 'completed' && sessionDate(session) >= start && sessionDate(session) <= end);
-  }, [customEnd, customStart, data.sessions, range]);
-
-  const exerciseData = useMemo(
-    () =>
-      filteredSessions
-        .flatMap((session) =>
-          session.exercises
-            .filter((exercise) => exercise.exerciseName === displayedExercise)
-            .map((exercise) => {
-              const sets = exercise.sets.filter((set) => set.completed && set.type === 'work');
-              const best = sets.reduce((current, set) =>
-                estimatedOneRepMax(set.weight, set.reps) > estimatedOneRepMax(current.weight, current.reps) ? set : current,
-              { weight: 0, reps: 0 });
-              return {
-                date: session.date,
-                label: format(sessionDate(session), 'dd/MM'),
-                weight: sets.reduce((max, set) => Math.max(max, set.weight), 0),
-                reps: sets.reduce((max, set) => Math.max(max, set.reps), 0),
-                e1rm: estimatedOneRepMax(best.weight, best.reps),
-                volume: sets.reduce((total, set) => total + set.weight * set.reps, 0),
-              };
-            }),
-        )
-        .sort((a, b) => a.date.localeCompare(b.date)),
-    [displayedExercise, filteredSessions],
-  );
 
   const bodyData = [...data.bodyMetrics]
     .sort((a, b) => a.date.localeCompare(b.date))
@@ -227,57 +150,8 @@ export function ProgressScreen({
             <TabsTrigger value="adherence" className="rounded-full text-xs">Ritmo</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="exercises" className="mt-5 space-y-4">
-            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-              {(['week', 'month', 'year', 'custom'] as RangeMode[]).map((mode) => (
-                <Button key={mode} size="sm" variant={range === mode ? 'default' : 'outline'} className="shrink-0 rounded-full" onClick={() => setRange(mode)}>{mode === 'week' ? 'Semana' : mode === 'month' ? 'Mes' : mode === 'year' ? 'Año' : 'Personalizado'}</Button>
-              ))}
-            </div>
-            {range === 'custom' ? (
-              <div className="mx-auto grid w-full max-w-[324px] grid-cols-2 gap-3">
-                <div className="min-w-0">
-                  <Label htmlFor="progress-start-date">Desde</Label>
-                  <div className="relative mt-1 min-w-0">
-                    <Input id="progress-start-date" className="gym-date-input h-10 min-w-0 pr-9 text-sm" type="date" value={customStart} onChange={(event) => setCustomStart(event.target.value)} />
-                    <CalendarDays aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-black/45 dark:text-white/45" />
-                  </div>
-                </div>
-                <div className="min-w-0">
-                  <Label htmlFor="progress-end-date">Hasta</Label>
-                  <div className="relative mt-1 min-w-0">
-                    <Input id="progress-end-date" className="gym-date-input h-10 min-w-0 pr-9 text-sm" type="date" value={customEnd} onChange={(event) => setCustomEnd(event.target.value)} />
-                    <CalendarDays aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-black/45 dark:text-white/45" />
-                  </div>
-                </div>
-              </div>
-            ) : null}
-
-            <div className="space-y-2">
-              <div className="grid grid-cols-2 rounded-full bg-black/6 p-1 dark:bg-white/8">
-                <button type="button" aria-pressed={exerciseScope === 'active-plan'} onClick={() => setExerciseScope('active-plan')} className={`h-9 rounded-full text-xs font-bold transition ${exerciseScope === 'active-plan' ? 'bg-black text-white shadow-sm dark:bg-white dark:text-black' : 'text-black/50 dark:text-white/50'}`}>Plan actual</button>
-                <button type="button" aria-pressed={exerciseScope === 'history'} onClick={() => setExerciseScope('history')} className={`h-9 rounded-full text-xs font-bold transition ${exerciseScope === 'history' ? 'bg-black text-white shadow-sm dark:bg-white dark:text-black' : 'text-black/50 dark:text-white/50'}`}>Todo el histórico</button>
-              </div>
-              <div className="flex items-center gap-2 px-1 text-xs text-black/45 dark:text-white/45"><Layers3 className="size-3.5 shrink-0" /><p className="min-w-0 truncate">{exerciseScope === 'active-plan' ? `${activePlan?.name ?? 'Sin plan activo'} · ${activeExerciseNames.length} ejercicios` : `${historicalExerciseNames.length} ejercicios guardados`}</p></div>
-            </div>
-
-            <Select value={displayedExercise} onValueChange={(value) => setSelectedExercise(value ?? '')}>
-              <SelectTrigger className="h-12 w-full rounded-[16px] bg-white px-4 font-bold dark:bg-[#1c1c1c]"><SelectValue placeholder="Selecciona un ejercicio" /></SelectTrigger>
-              <SelectContent>{exerciseNames.map((name) => <SelectItem key={name} value={name}>{name}</SelectItem>)}</SelectContent>
-            </Select>
-
-            {!exerciseNames.length ? <EmptyState icon={Dumbbell} title="Este plan no tiene ejercicios" description="Añade ejercicios al plan activo para verlos aquí." /> : exerciseData.length ? (
-              <>
-                <section className="grid grid-cols-3 gap-2">
-                  <Stat icon={Dumbbell} label="Carga máx." value={`${formatWeight(Math.max(...exerciseData.map((item) => item.weight)))} kg`} />
-                  <Stat icon={Trophy} label="1RM estimado" value={`${formatWeight(Math.max(...exerciseData.map((item) => item.e1rm)))} kg`} />
-                  <Stat icon={Target} label="Volumen" value={`${Math.round(exerciseData.reduce((sum, item) => sum + item.volume, 0) / 1000)}k`} />
-                </section>
-                <Card className="rounded-[24px] bg-white py-4 ring-black/6 dark:bg-[#1c1c1c] dark:ring-white/10">
-                  <CardContent className="px-2"><p className="px-3 text-sm font-extrabold">Carga y fuerza estimada</p><ChartContainer config={weightChart} className="mt-2 h-[230px] w-full"><LineChart data={exerciseData} margin={{ left: 0, right: 12, top: 12, bottom: 0 }}><CartesianGrid vertical={false} strokeDasharray="3 5" /><XAxis dataKey="label" tickLine={false} axisLine={false} /><YAxis hide domain={['dataMin - 5', 'dataMax + 5']} /><ChartTooltip content={<ChartTooltipContent valueFormatter={(value) => typeof value === 'number' ? `${formatWeight(value)} kg` : String(value)} />} /><Line dataKey="weight" type="monotone" stroke="var(--color-weight)" strokeWidth={3} dot={{ r: 3 }} /><Line dataKey="e1rm" type="monotone" stroke="var(--color-e1rm)" strokeWidth={2} strokeDasharray="5 5" dot={false} /></LineChart></ChartContainer></CardContent>
-                </Card>
-                <Card className="rounded-[24px] bg-black py-5 text-white ring-0"><CardContent className="px-5"><p className="text-xs font-bold uppercase tracking-wider text-white/40">Comparación del periodo</p><div className="mt-4 flex items-end justify-between"><div><p className="text-4xl font-black tracking-[-0.05em]">{formatWeight(exerciseData.at(-1)?.weight ?? 0)} kg</p><p className="mt-1 text-sm text-white/50">Última carga registrada</p></div>{exerciseData.length > 1 ? <Badge className="bg-white text-black">{(exerciseData.at(-1)?.weight ?? 0) >= exerciseData[0].weight ? <ArrowUpRight /> : <ArrowDownRight />}{formatWeight(Math.abs((exerciseData.at(-1)?.weight ?? 0) - exerciseData[0].weight))} kg</Badge> : null}</div></CardContent></Card>
-              </>
-            ) : <EmptyState icon={ChartNoAxesColumnIncreasing} title="Todavía no hay registros" description="Completa este ejercicio para crear su primera gráfica comparable." />}
+          <TabsContent value="exercises" className="mt-5">
+            <StrengthProgress data={data} />
           </TabsContent>
 
           <TabsContent value="body" className="mt-5 space-y-4">

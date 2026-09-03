@@ -26,6 +26,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 import { BrandMark, SaveIndicator } from './shared';
+import { homeProgressInsight } from '@/lib/gymletics/analysis';
 import { sessionVolume } from '@/lib/gymletics/progression';
 import { formatWeight } from '@/lib/gymletics/weight-format';
 import type { GymleticsData, RoutineDay, WorkoutPlan } from '@/lib/gymletics/types';
@@ -96,6 +97,7 @@ export function HomeScreen({
   const lastVolume = progressData.at(-1)?.volume ?? 0;
   const previousVolume = progressData.at(-2)?.volume ?? 0;
   const change = previousVolume > 0 ? Math.round(((lastVolume - previousVolume) / previousVolume) * 100) : 0;
+  const progressInsight = homeProgressInsight(data, now);
 
   return (
     <div className="pb-24">
@@ -207,6 +209,17 @@ export function HomeScreen({
             </CardContent>
           </Card>
         </section>
+
+        <Card className="rounded-[24px] bg-black py-4 text-white ring-0 dark:bg-white dark:text-black">
+          <CardContent className="flex items-start gap-3 px-4">
+            <div className="grid size-10 shrink-0 place-items-center rounded-full bg-white/12 dark:bg-black/10"><Sparkles className="size-4" /></div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] opacity-45">Análisis de progreso</p>
+              <p className="mt-1.5 text-sm font-extrabold leading-snug">{progressInsight}</p>
+              <button type="button" onClick={onProgress} className="mt-2 flex items-center gap-1 text-xs font-bold opacity-55 transition hover:opacity-100">Ver detalle <ChevronRight className="size-3.5" /></button>
+            </div>
+          </CardContent>
+        </Card>
 
         <Card className="rounded-[24px] bg-white py-0 ring-black/6 shadow-[0_8px_28px_rgba(0,0,0,0.04)] dark:bg-[#1c1c1c] dark:ring-white/10">
           <CardHeader className="flex-row items-center justify-between px-4 pb-0 pt-4">

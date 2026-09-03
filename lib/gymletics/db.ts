@@ -1,4 +1,5 @@
 import { createDefaultData } from './defaults';
+import { isStoredGymleticsData, reconcileExerciseLibrary } from './exercise-library';
 import type { GymleticsData } from './types';
 
 const DB_NAME = 'gymletics-local';
@@ -26,7 +27,10 @@ export async function loadData(): Promise<GymleticsData> {
   return new Promise((resolve, reject) => {
     const transaction = database.transaction(STORE, 'readonly');
     const request = transaction.objectStore(STORE).get(STATE_KEY);
-    request.onsuccess = () => resolve((request.result as GymleticsData | undefined) ?? createDefaultData());
+    request.onsuccess = () => {
+      const stored = request.result as unknown;
+      resolve(isStoredGymleticsData(stored) ? reconcileExerciseLibrary(stored) : createDefaultData());
+    };
     request.onerror = () => reject(request.error);
     transaction.oncomplete = () => database.close();
   });
@@ -46,8 +50,11 @@ export async function saveData(data: GymleticsData): Promise<void> {
   });
 }
 
-export function isGymleticsData(value: unknown): value is GymleticsData {
-  if (!value || typeof value !== 'object') return false;
-  const candidate = value as Partial<GymleticsData>;
-  return candidate.version === 1 && Array.isArray(candidate.plans) && Array.isArray(candidate.sessions);
+export function isGymleticsData(value: unknown) {
+  return isStoredGymleticsData(value);
+}
+
+export function migrateGymleticsData(value: unknown): GymleticsData {
+  if (!isStoredGymleticsData(value)) throw new Error('La copia no contiene datos válidos de Gymletics.');
+  return reconcileExerciseLibrary(value);
 }

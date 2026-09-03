@@ -18,9 +18,23 @@ export type CalendarStatus =
   | 'missed';
 export type PhotoPose = 'frontal' | 'lateral' | 'espalda';
 
-export interface PlanExercise {
+export interface ExerciseDefinition {
   id: string;
   name: string;
+  variant: string;
+  equipment: string;
+  muscleGroup: string;
+  unit: WeightUnit;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PlanExercise {
+  id: string;
+  libraryExerciseId?: string;
+  name: string;
+  variant?: string;
+  equipment?: string;
   muscleGroup: string;
   unit: WeightUnit;
   sets: number;
@@ -61,7 +75,10 @@ export interface SetLog {
 export interface ExerciseLog {
   id: string;
   planExerciseId: string;
+  libraryExerciseId?: string;
   exerciseName: string;
+  variant?: string;
+  equipment?: string;
   muscleGroup: string;
   unit: WeightUnit;
   targetSets: number;
@@ -114,7 +131,8 @@ export interface AppSettings {
 }
 
 export interface GymleticsData {
-  version: 1;
+  version: 2;
+  exerciseLibrary: ExerciseDefinition[];
   plans: WorkoutPlan[];
   activePlanId: string;
   nextDayByPlan: Record<string, number>;

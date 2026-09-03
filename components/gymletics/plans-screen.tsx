@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import {
+  BookOpen,
   Check,
   ChevronDown,
   ChevronUp,
@@ -44,8 +45,15 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { DecimalWeightInput } from './decimal-weight-input';
+import { ExerciseLibraryDialog } from './exercise-library-dialog';
 import { ScreenHeader, SectionTitle } from './shared';
 import { uid } from '@/lib/gymletics/defaults';
+import {
+  createExerciseDefinition,
+  exerciseDefinitionLabel,
+  exerciseIdentityKey,
+  findExerciseDefinition,
+} from '@/lib/gymletics/exercise-library';
 import type {
   GymleticsData,
   PlanExercise,
@@ -67,7 +75,10 @@ const techniques: Array<{ value: Technique; label: string }> = [
 
 type ExerciseDraft = Omit<PlanExercise, 'id'>;
 const emptyExercise: ExerciseDraft = {
+  libraryExerciseId: undefined,
   name: '',
+  variant: '',
+  equipment: '',
   muscleGroup: '',
   unit: 'kg',
   sets: 4,
@@ -98,8 +109,10 @@ export function PlansScreen({
   const [dayFocus, setDayFocus] = useState('');
   const [cardioMinutes, setCardioMinutes] = useState(20);
   const [exerciseDialogOpen, setExerciseDialogOpen] = useState(false);
+  const [libraryDialogOpen, setLibraryDialogOpen] = useState(false);
   const [editingExerciseId, setEditingExerciseId] = useState<string | null>(null);
   const [exerciseDraft, setExerciseDraft] = useState<ExerciseDraft>(emptyExercise);
+  const [exerciseError, setExerciseError] = useState('');
 
   const plan = data.plans.find((item) => item.id === selectedPlanId) ?? data.plans[0];
   const day = plan?.days.find((item) => item.id === selectedDayId) ?? plan?.days[0];
@@ -280,43 +293,88 @@ export function PlansScreen({
   function openNewExercise() {
     setEditingExerciseId(null);
     setExerciseDraft(emptyExercise);
+    setExerciseError('');
     setExerciseDialogOpen(true);
   }
 
   function openEditExercise(exercise: PlanExercise) {
     const { id: _id, ...draft } = exercise;
+    const definition = findExerciseDefinition(data.exerciseLibrary, exercise);
     setEditingExerciseId(exercise.id);
-    setExerciseDraft(draft);
+    setExerciseDraft({
+      ...draft,
+      libraryExerciseId: definition?.id ?? draft.libraryExerciseId,
+      name: definition?.name ?? draft.name,
+      variant: definition?.variant ?? draft.variant ?? '',
+      equipment: definition?.equipment ?? draft.equipment ?? '',
+      muscleGroup: definition?.muscleGroup ?? draft.muscleGroup,
+      unit: definition?.unit ?? draft.unit,
+    });
+    setExerciseError('');
     setExerciseDialogOpen(true);
   }
 
   function saveExercise() {
     if (!day || !exerciseDraft.name.trim()) return;
-    const normalized = {
-      ...exerciseDraft,
-      name: exerciseDraft.name.trim(),
-      muscleGroup: exerciseDraft.muscleGroup.trim() || 'General',
-      sets: Math.max(1, exerciseDraft.sets),
-      reps: Math.max(1, exerciseDraft.reps),
-      restSeconds: Math.max(0, exerciseDraft.restSeconds),
-      increment: Math.max(0, exerciseDraft.increment),
-      warmupSets: Math.max(0, exerciseDraft.warmupSets),
-    };
-    updatePlan((current) => ({
-      ...current,
-      days: current.days.map((item) => {
-        if (item.id !== day.id) return item;
-        if (editingExerciseId) {
-          return {
-            ...item,
-            exercises: item.exercises.map((exercise) =>
-              exercise.id === editingExerciseId ? { ...normalized, id: exercise.id } : exercise,
-            ),
-          };
-        }
-        return { ...item, exercises: [...item.exercises, { ...normalized, id: uid('ex') }] };
-      }),
-    }));
+    const candidate = createExerciseDefinition({
+      name: exerciseDraft.name,
+      variant: exerciseDraft.variant ?? '',
+      equipment: exerciseDraft.equipment ?? '',
+      muscleGroup: exerciseDraft.muscleGroup,
+      unit: exerciseDraft.unit,
+    });
+    const candidateKey = exerciseIdentityKey(candidate);
+    const existingDefinition = data.exerciseLibrary.find((definition) => exerciseIdentityKey(definition) === candidateKey);
+    const targetDefinition = existingDefinition ?? candidate;
+    const duplicateInDay = day.exercises.some((exercise) => {
+      if (exercise.id === editingExerciseId) return false;
+      if (exercise.libraryExerciseId === targetDefinition.id) return true;
+      return exerciseIdentityKey({
+        name: exercise.name,
+        variant: exercise.variant ?? '',
+        equipment: exercise.equipment ?? '',
+        unit: exercise.unit,
+      }) === candidateKey;
+    });
+    if (duplicateInDay) {
+      setExerciseError('Este mismo ejercicio, variante, equipo y unidad ya está añadido al día.');
+      return;
+    }
+    updateData((current) => {
+      const definition = current.exerciseLibrary.find((item) => exerciseIdentityKey(item) === candidateKey) ?? candidate;
+      const normalized: PlanExercise = {
+        ...exerciseDraft,
+        libraryExerciseId: definition.id,
+        name: definition.name,
+        variant: definition.variant,
+        equipment: definition.equipment,
+        muscleGroup: definition.muscleGroup,
+        unit: definition.unit,
+        id: editingExerciseId ?? uid('ex'),
+        sets: Math.max(1, exerciseDraft.sets),
+        reps: Math.max(1, exerciseDraft.reps),
+        restSeconds: Math.max(0, exerciseDraft.restSeconds),
+        increment: Math.max(0, exerciseDraft.increment),
+        warmupSets: Math.max(0, exerciseDraft.warmupSets),
+      };
+      return {
+        ...current,
+        exerciseLibrary: current.exerciseLibrary.some((item) => item.id === definition.id)
+          ? current.exerciseLibrary
+          : [...current.exerciseLibrary, definition].sort((a, b) => exerciseDefinitionLabel(a).localeCompare(exerciseDefinitionLabel(b), 'es')),
+        plans: current.plans.map((item) => item.id === plan?.id ? {
+          ...item,
+          updatedAt: new Date().toISOString(),
+          days: item.days.map((currentDay) => currentDay.id === day.id ? {
+            ...currentDay,
+            exercises: editingExerciseId
+              ? currentDay.exercises.map((exercise) => exercise.id === editingExerciseId ? normalized : exercise)
+              : [...currentDay.exercises, normalized],
+          } : currentDay),
+        } : item),
+      };
+    });
+    setExerciseError('');
     setExerciseDialogOpen(false);
   }
 
@@ -336,18 +394,6 @@ export function PlansScreen({
     }));
   }
 
-  function duplicateExercise(exercise: PlanExercise) {
-    if (!day) return;
-    updatePlan((current) => ({
-      ...current,
-      days: current.days.map((item) =>
-        item.id === day.id
-          ? { ...item, exercises: [...item.exercises, { ...exercise, id: uid('ex'), name: `${exercise.name} copia` }] }
-          : item,
-      ),
-    }));
-  }
-
   function deleteExercise(id: string) {
     if (!day) return;
     updatePlan((current) => ({
@@ -363,7 +409,7 @@ export function PlansScreen({
       <ScreenHeader
         title="Planes"
         subtitle={`${data.plans.length} guardado${data.plans.length === 1 ? '' : 's'}`}
-        action={<Button size="sm" className="rounded-full" onClick={openNewPlan}><Plus /> Plan</Button>}
+        action={<div className="flex items-center gap-1"><Button size="sm" variant="outline" className="rounded-full" onClick={() => setLibraryDialogOpen(true)}><BookOpen /> Biblioteca</Button><Button size="sm" className="rounded-full" onClick={openNewPlan}><Plus /> Plan</Button></div>}
       />
 
       <div className="space-y-6 px-4 pt-4">
@@ -446,15 +492,15 @@ export function PlansScreen({
                   <CardContent className="flex items-center gap-3 px-3">
                     <div className="grid size-9 shrink-0 place-items-center rounded-full bg-[#eeeeea] text-xs font-black dark:bg-white/10">{String(index + 1).padStart(2, '0')}</div>
                     <button type="button" className="min-w-0 flex-1 text-left" onClick={() => openEditExercise(exercise)}>
-                      <p className="truncate text-sm font-extrabold">{exercise.name}</p>
-                      <p className="mt-0.5 truncate text-xs text-black/45 dark:text-white/45">{exercise.sets}×{exercise.reps} · {exercise.restSeconds}s · {techniques.find((item) => item.value === exercise.technique)?.label}</p>
+                      <p className="truncate text-sm font-extrabold">{exercise.variant ? `${exercise.name} — ${exercise.variant}` : exercise.name}</p>
+                      <p className="mt-0.5 truncate text-xs text-black/45 dark:text-white/45">{exercise.equipment || 'Equipo sin indicar'} · {exercise.unit}</p>
+                      <p className="mt-0.5 truncate text-[11px] text-black/35 dark:text-white/35">{exercise.sets}×{exercise.reps} · {exercise.restSeconds}s · {techniques.find((item) => item.value === exercise.technique)?.label}</p>
                     </button>
                     <div className="flex items-center">
                       <div className="flex flex-col">
                         <button type="button" aria-label="Subir ejercicio" onClick={() => moveExercise(exercise.id, -1)} disabled={index === 0} className="grid size-6 place-items-center disabled:opacity-20"><ChevronUp className="size-3.5" /></button>
                         <button type="button" aria-label="Bajar ejercicio" onClick={() => moveExercise(exercise.id, 1)} disabled={index === day.exercises.length - 1} className="grid size-6 place-items-center disabled:opacity-20"><ChevronDown className="size-3.5" /></button>
                       </div>
-                      <Button aria-label="Duplicar ejercicio" variant="ghost" size="icon-sm" onClick={() => duplicateExercise(exercise)}><Copy /></Button>
                       <Button aria-label="Eliminar ejercicio" variant="ghost" size="icon-sm" className="text-red-600" onClick={() => deleteExercise(exercise.id)}><Trash2 /></Button>
                     </div>
                   </CardContent>
@@ -517,9 +563,24 @@ export function PlansScreen({
 
       <Dialog open={exerciseDialogOpen} onOpenChange={setExerciseDialogOpen}>
         <DialogContent className="max-h-[90dvh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{editingExerciseId ? 'Editar ejercicio' : 'Añadir ejercicio'}</DialogTitle><DialogDescription>Configura la progresión y el registro de este ejercicio.</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>{editingExerciseId ? 'Editar ejercicio' : 'Añadir ejercicio'}</DialogTitle><DialogDescription>Elige una definición de la biblioteca o crea una combinación nueva y única.</DialogDescription></DialogHeader>
           <div className="space-y-3">
+            <div><Label>Biblioteca</Label><Select value={exerciseDraft.libraryExerciseId ?? '__new__'} onValueChange={(value) => {
+              if (!value || value === '__new__') {
+                setExerciseDraft((current) => ({ ...current, libraryExerciseId: undefined, name: '', variant: '', equipment: '', muscleGroup: '' }));
+                setExerciseError('');
+                return;
+              }
+              const definition = data.exerciseLibrary.find((item) => item.id === value);
+              if (!definition) return;
+              setExerciseDraft((current) => ({ ...current, libraryExerciseId: definition.id, name: definition.name, variant: definition.variant, equipment: definition.equipment, muscleGroup: definition.muscleGroup, unit: definition.unit }));
+              setExerciseError('');
+            }}><SelectTrigger className="mt-1 h-11 w-full"><SelectValue placeholder="Selecciona un ejercicio" /></SelectTrigger><SelectContent><SelectItem value="__new__">Crear definición nueva</SelectItem>{data.exerciseLibrary.map((exercise) => <SelectItem key={exercise.id} value={exercise.id}>{exerciseDefinitionLabel(exercise)} · {exercise.equipment} · {exercise.unit}</SelectItem>)}</SelectContent></Select></div>
             <div><Label htmlFor="exercise-name">Nombre</Label><Input id="exercise-name" className="mt-1 h-10" value={exerciseDraft.name} onChange={(event) => setExerciseDraft((current) => ({ ...current, name: event.target.value }))} placeholder="Press inclinado con barra" /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label htmlFor="exercise-variant">Variante</Label><Input id="exercise-variant" className="mt-1 h-10" value={exerciseDraft.variant ?? ''} onChange={(event) => setExerciseDraft((current) => ({ ...current, variant: event.target.value }))} placeholder="Agarre neutro" /></div>
+              <div><Label htmlFor="exercise-equipment">Máquina/equipo</Label><Input id="exercise-equipment" className="mt-1 h-10" value={exerciseDraft.equipment ?? ''} onChange={(event) => setExerciseDraft((current) => ({ ...current, equipment: event.target.value }))} placeholder="Hammer MTS" /></div>
+            </div>
             <div><Label htmlFor="muscle-group">Grupo muscular</Label><Input id="muscle-group" className="mt-1 h-10" value={exerciseDraft.muscleGroup} onChange={(event) => setExerciseDraft((current) => ({ ...current, muscleGroup: event.target.value }))} placeholder="Pecho" /></div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Unidad</Label><Select value={exerciseDraft.unit} onValueChange={(value) => setExerciseDraft((current) => ({ ...current, unit: value as WeightUnit }))}><SelectTrigger className="mt-1 h-10 w-full"><SelectValue /></SelectTrigger><SelectContent>{units.map((unit) => <SelectItem key={unit} value={unit}>{unit}</SelectItem>)}</SelectContent></Select></div>
@@ -535,10 +596,13 @@ export function PlansScreen({
               <div><Label htmlFor="warmup">Calentamiento</Label><Input id="warmup" type="number" className="mt-1 h-10" value={exerciseDraft.warmupSets} onChange={(event) => setExerciseDraft((current) => ({ ...current, warmupSets: Number(event.target.value) }))} /></div>
             </div>
             <div className="flex items-center justify-between rounded-xl bg-black/4 p-3 dark:bg-white/6"><Label htmlFor="unilateral" className="block"><span className="block text-sm font-semibold">Ejercicio unilateral</span><span className="text-xs font-normal text-black/45 dark:text-white/45">Registra el peso por lado o miembro</span></Label><Switch id="unilateral" checked={exerciseDraft.unilateral} onCheckedChange={(checked) => setExerciseDraft((current) => ({ ...current, unilateral: checked }))} /></div>
+            {exerciseError ? <p className="text-xs font-semibold text-red-600">{exerciseError}</p> : null}
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setExerciseDialogOpen(false)}>Cancelar</Button><Button onClick={saveExercise}>Guardar ejercicio</Button></DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ExerciseLibraryDialog data={data} updateData={updateData} open={libraryDialogOpen} onOpenChange={setLibraryDialogOpen} />
     </div>
   );
 }

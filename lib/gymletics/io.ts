@@ -28,6 +28,9 @@ function rowsFromData(data: GymleticsData) {
         Dia: session.dayName,
         Enfoque: session.focus,
         Ejercicio: exercise.exerciseName,
+        Variante: exercise.variant ?? '',
+        Equipo: exercise.equipment ?? '',
+        Biblioteca_ID: exercise.libraryExerciseId ?? '',
         Grupo_muscular: exercise.muscleGroup,
         Tipo_serie: set.type,
         Serie: set.index + 1,
@@ -70,6 +73,9 @@ export async function exportExcel(data: GymleticsData) {
     Fecha: session.date,
     Dia: session.dayName,
     Ejercicio: exercise.exerciseName,
+    Variante: exercise.variant ?? '',
+    Equipo: exercise.equipment ?? '',
+    Biblioteca_ID: exercise.libraryExerciseId ?? '',
     Grupo_muscular: exercise.muscleGroup,
     Series_objetivo: exercise.targetSets,
     Reps_objetivo: exercise.targetReps,
@@ -80,6 +86,7 @@ export async function exportExcel(data: GymleticsData) {
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(sessions), 'Sesiones');
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(records), 'Registros');
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(rowsFromData(data)), 'Series_DB');
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.exerciseLibrary), 'Biblioteca');
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.bodyMetrics), 'Mediciones');
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.calendarMarks), 'Calendario');
   XLSX.writeFile(workbook, `gymletics-${today()}.xlsx`, { compression: true });
@@ -203,7 +210,7 @@ export async function importWorkbook(file: File, activePlanId: string): Promise<
     }
   }
 
-  type ExerciseBucket = { name: string; muscle: string; unit: WeightUnit; sets: SetLog[]; rp: [number, number]; technique: 'normal' | 'rest-pause' };
+  type ExerciseBucket = { name: string; variant: string; equipment: string; muscle: string; unit: WeightUnit; sets: SetLog[]; rp: [number, number]; technique: 'normal' | 'rest-pause' };
   type SessionBucket = { id: string; date: string; day: string; focus: string; exercises: Map<string, ExerciseBucket>; cardio: number };
   const buckets = new Map<string, SessionBucket>();
 
@@ -223,11 +230,16 @@ export async function importWorkbook(file: File, activePlanId: string): Promise<
       exercises: new Map<string, ExerciseBucket>(),
       cardio: numberValue(pick(meta ?? {}, ['cardio_min', 'cardio', 'minutos_cardio'])),
     };
-    const exerciseKey = normalizeKey(exerciseName);
+    const variant = String(pick(row, ['variante', 'variant']) ?? '').trim();
+    const equipment = String(pick(row, ['equipo', 'maquina', 'máquina', 'equipment']) ?? '').trim();
+    const unit = inferUnit(pick(row, ['unidad', 'unit']));
+    const exerciseKey = [exerciseName, variant, equipment, unit].map(normalizeKey).join('|');
     const exercise = bucket.exercises.get(exerciseKey) ?? {
       name: exerciseName,
+      variant,
+      equipment,
       muscle: String(pick(row, ['grupo_muscular', 'musculo', 'grupo']) ?? 'General'),
-      unit: inferUnit(pick(row, ['unidad', 'unit'])),
+      unit,
       sets: [],
       rp: [0, 0],
       technique: 'normal',
@@ -271,6 +283,8 @@ export async function importWorkbook(file: File, activePlanId: string): Promise<
         id: uid('log'),
         planExerciseId: `import_${normalizeKey(bucket.day)}_${normalizeKey(exercise.name)}`,
         exerciseName: exercise.name,
+        variant: exercise.variant,
+        equipment: exercise.equipment,
         muscleGroup: exercise.muscle,
         unit: exercise.unit,
         targetSets: workSets.length || 4,

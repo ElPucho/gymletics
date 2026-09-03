@@ -6,6 +6,7 @@ import type {
   WorkoutSession,
 } from './types';
 import { formatWeight } from './weight-format';
+import { exerciseIdentityKey, inferExerciseEquipment } from './exercise-library';
 
 function workingSets(log: ExerciseLog) {
   return log.sets.filter((set) => set.type === 'work');
@@ -49,7 +50,10 @@ export function comparableHistory(
   const exact = completed.flatMap((session) =>
     session.planId === planId && session.dayId === dayId
       ? session.exercises
-          .filter((log) => log.planExerciseId === exercise.id)
+          .filter((log) =>
+            log.planExerciseId === exercise.id
+            || Boolean(exercise.libraryExerciseId && log.libraryExerciseId === exercise.libraryExerciseId),
+          )
           .map((log) => ({ session, log }))
       : [],
   );
@@ -59,8 +63,18 @@ export function comparableHistory(
     session.exercises
       .filter(
         (log) =>
-          log.exerciseName.toLocaleLowerCase('es') === exercise.name.toLocaleLowerCase('es') &&
-          log.unit === exercise.unit,
+          Boolean(exercise.libraryExerciseId && log.libraryExerciseId === exercise.libraryExerciseId)
+          || exerciseIdentityKey({
+            name: log.exerciseName,
+            variant: log.variant ?? '',
+            equipment: log.equipment || inferExerciseEquipment(log.exerciseName, log.unit),
+            unit: log.unit,
+          }) === exerciseIdentityKey({
+            name: exercise.name,
+            variant: exercise.variant ?? '',
+            equipment: exercise.equipment || inferExerciseEquipment(exercise.name, exercise.unit),
+            unit: exercise.unit,
+          }),
       )
       .map((log) => ({ session, log })),
   );

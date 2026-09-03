@@ -36,6 +36,7 @@ import {
 import { ManualWorkoutDialog } from './manual-workout-dialog';
 import { SessionEditorDialog } from './session-editor-dialog';
 import { ScreenHeader, SectionTitle } from './shared';
+import { exerciseDefinitionLabel } from '@/lib/gymletics/exercise-library';
 import { formatWeight } from '@/lib/gymletics/weight-format';
 import type { CalendarStatus, GymleticsData, WorkoutSession } from '@/lib/gymletics/types';
 
@@ -179,7 +180,7 @@ export function CalendarScreen({
             <DialogTitle>{sessionDialog?.dayName}</DialogTitle>
             <DialogDescription>{sessionDialog ? `${format(new Date(`${sessionDialog.date}T12:00:00`), "d 'de' MMMM 'de' yyyy", { locale: es })} · ${sessionDialog.focus}` : ''}</DialogDescription>
           </DialogHeader>
-          <div className="space-y-2">{sessionDialog?.exercises.map((exercise) => { const working = exercise.sets.filter((set) => set.type === 'work' && set.completed); return <div key={exercise.id} className="rounded-[16px] bg-black/4 p-3 dark:bg-white/6"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-extrabold">{exercise.exerciseName}</p><p className="mt-0.5 text-xs text-black/45 dark:text-white/45">{working.map((set) => `${formatWeight(set.weight)}×${set.reps}`).join(' · ') || 'Sin series completadas'}</p></div>{exercise.restPause && exercise.restPause.some((repetitions) => repetitions > 0) ? <Badge variant="outline">RP {exercise.restPause.map((repetitions) => repetitions || '—').join('+')}</Badge> : null}</div></div>; })}<div className="flex items-center justify-between rounded-[16px] bg-black p-3 text-white"><span className="text-sm font-extrabold">Cardio</span><span className="text-sm font-black">{sessionDialog?.cardioMinutes ?? 0} min</span></div></div>
+          <div className="space-y-2">{sessionDialog?.exercises.map((exercise) => { const working = exercise.sets.filter((set) => set.type === 'work' && set.completed); return <div key={exercise.id} className="rounded-[16px] bg-black/4 p-3 dark:bg-white/6"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-extrabold">{exerciseDefinitionLabel({ name: exercise.exerciseName, variant: exercise.variant ?? '' })}</p><p className="mt-0.5 text-[10px] text-black/40 dark:text-white/40">{exercise.equipment} · {exercise.unit}</p><p className="mt-1 text-xs text-black/45 dark:text-white/45">{working.map((set) => `${formatWeight(set.weight)}×${set.reps}`).join(' · ') || 'Sin series completadas'}</p></div>{exercise.restPause && exercise.restPause.some((repetitions) => repetitions > 0) ? <Badge variant="outline">RP {exercise.restPause.map((repetitions) => repetitions || '—').join('+')}</Badge> : null}</div></div>; })}<div className="flex items-center justify-between rounded-[16px] bg-black p-3 text-white"><span className="text-sm font-extrabold">Cardio</span><span className="text-sm font-black">{sessionDialog?.cardioMinutes ?? 0} min</span></div></div>
           <DialogFooter><Button variant="outline" onClick={closeSessionDialog}>Cerrar</Button><Button onClick={() => { if (sessionDialog) setEditingSession(sessionDialog); }}><Pencil /> Editar entrenamiento</Button></DialogFooter>
         </DialogContent>
       </Dialog>

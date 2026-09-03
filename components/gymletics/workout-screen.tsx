@@ -33,16 +33,33 @@ import { DecimalWeightInput } from './decimal-weight-input';
 import { EditableIntegerInput } from './editable-integer-input';
 import { ScreenHeader } from './shared';
 import { uid } from '@/lib/gymletics/defaults';
+import { exerciseDefinitionLabel, exerciseIdentityKey, inferExerciseEquipment } from '@/lib/gymletics/exercise-library';
 import { recommendWeight } from '@/lib/gymletics/progression';
 import { buildExerciseLog } from '@/lib/gymletics/session-builder';
 import { formatWeight } from '@/lib/gymletics/weight-format';
 import type {
+  ExerciseLog,
   GymleticsData,
   RoutineDay,
   SetLog,
   WorkoutPlan,
   WorkoutSession,
 } from '@/lib/gymletics/types';
+
+function planExerciseMatchesLog(exercise: RoutineDay['exercises'][number], log: ExerciseLog) {
+  if (exercise.libraryExerciseId && log.libraryExerciseId) return exercise.libraryExerciseId === log.libraryExerciseId;
+  return exerciseIdentityKey({
+    name: exercise.name,
+    variant: exercise.variant ?? '',
+    equipment: exercise.equipment || inferExerciseEquipment(exercise.name, exercise.unit),
+    unit: exercise.unit,
+  }) === exerciseIdentityKey({
+    name: log.exerciseName,
+    variant: log.variant ?? '',
+    equipment: log.equipment || inferExerciseEquipment(log.exerciseName, log.unit),
+    unit: log.unit,
+  });
+}
 
 function firstIncompleteExercise(session: WorkoutSession) {
   const index = session.exercises.findIndex((exercise) =>
@@ -102,7 +119,12 @@ export function WorkoutScreen({
   const exerciseLibrary = useMemo(() => {
     const unique = new Map<string, RoutineDay['exercises'][number]>();
     data.plans.forEach((itemPlan) => itemPlan.days.forEach((itemDay) => itemDay.exercises.forEach((exercise) => {
-      const key = `${exercise.name.trim().toLocaleLowerCase('es')}|${exercise.unit}`;
+      const key = exercise.libraryExerciseId ?? exerciseIdentityKey({
+        name: exercise.name,
+        variant: exercise.variant ?? '',
+        equipment: exercise.equipment || inferExerciseEquipment(exercise.name, exercise.unit),
+        unit: exercise.unit,
+      });
       if (!unique.has(key)) unique.set(key, exercise);
     })));
     return [...unique.values()].sort((a, b) => a.name.localeCompare(b.name, 'es'));
@@ -110,7 +132,7 @@ export function WorkoutScreen({
   const selectedLog = activeSession?.exercises[exerciseIndex];
   const selectedPlanExercise = selectedLog
     ? exerciseLibrary.find((item) => item.id === selectedLog.planExerciseId)
-      ?? exerciseLibrary.find((item) => item.name.toLocaleLowerCase('es') === selectedLog.exerciseName.toLocaleLowerCase('es') && item.unit === selectedLog.unit)
+      ?? exerciseLibrary.find((item) => planExerciseMatchesLog(item, selectedLog))
     : undefined;
   const recentHistory = useMemo(() => {
     if (!selectedLog) return [];
@@ -118,7 +140,9 @@ export function WorkoutScreen({
       .filter((item) => item.status === 'completed' && item.id !== activeSession?.id)
       .sort((a, b) => b.date.localeCompare(a.date))
       .flatMap((item) => item.exercises
-        .filter((exercise) => exercise.exerciseName.toLocaleLowerCase('es') === selectedLog.exerciseName.toLocaleLowerCase('es') && exercise.unit === selectedLog.unit)
+        .filter((exercise) => selectedLog.libraryExerciseId
+          ? exercise.libraryExerciseId === selectedLog.libraryExerciseId
+          : exercise.exerciseName.toLocaleLowerCase('es') === selectedLog.exerciseName.toLocaleLowerCase('es') && exercise.unit === selectedLog.unit)
         .map((log) => ({ session: item, log })))
       .slice(0, 3);
   }, [activeSession?.id, selectedLog, data.sessions]);
@@ -496,7 +520,7 @@ export function WorkoutScreen({
 
   const currentLog = activeSession.exercises[exerciseIndex];
   const currentPlanExercise = exerciseLibrary.find((item) => item.id === currentLog?.planExerciseId)
-    ?? exerciseLibrary.find((item) => item.name.toLocaleLowerCase('es') === currentLog.exerciseName.toLocaleLowerCase('es') && item.unit === currentLog.unit);
+    ?? exerciseLibrary.find((item) => planExerciseMatchesLog(item, currentLog));
   const completedExerciseCount = activeSession.exercises.filter((exercise) => exercise.sets.filter((set) => set.type === 'work').every((set) => set.completed)).length;
   const sessionProgress = activeSession.exercises.length ? Math.round((completedExerciseCount / activeSession.exercises.length) * 100) : 0;
   const workCompleted = currentLog?.sets.filter((set) => set.type === 'work').every((set) => set.completed) ?? false;
@@ -540,7 +564,8 @@ export function WorkoutScreen({
       <div className="px-4 pt-5">
         <div className="mb-5">
           <div className="mb-2 flex items-center gap-2"><Badge variant="secondary">{currentLog.muscleGroup}</Badge><Badge variant="outline">{currentPlanExercise?.technique ?? currentLog.technique}</Badge></div>
-          <h1 className="text-[34px] font-black leading-[1.02] tracking-[-0.055em]">{currentLog.exerciseName}</h1>
+          <h1 className="text-[34px] font-black leading-[1.02] tracking-[-0.055em]">{exerciseDefinitionLabel({ name: currentLog.exerciseName, variant: currentLog.variant ?? '' })}</h1>
+          <p className="mt-1 text-xs font-semibold text-black/45 dark:text-white/45">{currentLog.equipment || 'Equipo sin indicar'} · {currentLog.unit}</p>
           {currentPlanExercise ? (
             <div className="mt-4 flex items-start gap-3 rounded-[18px] bg-black p-3.5 text-white dark:bg-white dark:text-black">
               <Sparkles className="mt-0.5 size-4 shrink-0" />
@@ -569,7 +594,7 @@ export function WorkoutScreen({
             <div className="mb-1.5 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-black/40 dark:text-white/40"><Shuffle className="size-3.5" /> Sustituir solo hoy</div>
             <Select value="" onValueChange={replaceCurrentExercise}>
               <SelectTrigger className="h-10 w-full rounded-[14px] bg-white dark:bg-[#1c1c1c]"><SelectValue placeholder="Elegir otro ejercicio" /></SelectTrigger>
-              <SelectContent>{exerciseLibrary.filter((exercise) => !(exercise.name.toLocaleLowerCase('es') === currentLog.exerciseName.toLocaleLowerCase('es') && exercise.unit === currentLog.unit)).map((exercise) => <SelectItem key={exercise.id} value={exercise.id}>{exercise.name} · {exercise.unit}</SelectItem>)}</SelectContent>
+              <SelectContent>{exerciseLibrary.filter((exercise) => !planExerciseMatchesLog(exercise, currentLog)).map((exercise) => <SelectItem key={exercise.id} value={exercise.id}>{exerciseDefinitionLabel({ name: exercise.name, variant: exercise.variant ?? '' })} · {exercise.equipment} · {exercise.unit}</SelectItem>)}</SelectContent>
             </Select>
           </div>
         </div>

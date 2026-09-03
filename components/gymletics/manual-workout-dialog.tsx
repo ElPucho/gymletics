@@ -20,6 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DecimalWeightInput } from './decimal-weight-input';
 import { EditableIntegerInput } from './editable-integer-input';
 import { uid } from '@/lib/gymletics/defaults';
+import { exerciseDefinitionLabel } from '@/lib/gymletics/exercise-library';
 import { buildExerciseLog } from '@/lib/gymletics/session-builder';
 import type {
   ExerciseLog,
@@ -235,7 +236,7 @@ export function ManualWorkoutDialog({
               {draft.exercises.map((exercise) => (
                 <section key={exercise.id} className="rounded-[20px] bg-black/4 p-3 dark:bg-white/6">
                   <div className="mb-3 flex items-start justify-between gap-3">
-                    <div><p className="text-sm font-extrabold">{exercise.exerciseName}</p><p className="text-[10px] text-black/45 dark:text-white/45">{exercise.muscleGroup}</p></div>
+                    <div><p className="text-sm font-extrabold">{exerciseDefinitionLabel({ name: exercise.exerciseName, variant: exercise.variant ?? '' })}</p><p className="text-[10px] text-black/45 dark:text-white/45">{exercise.equipment} · {exercise.unit} · {exercise.muscleGroup}</p></div>
                     <Badge variant="outline">{exercise.unit}</Badge>
                   </div>
                   <div className="mb-1 grid grid-cols-[30px_1fr_64px_36px] gap-2 px-1 text-[9px] font-bold uppercase text-black/35 dark:text-white/35"><span>#</span><span>Peso</span><span>Reps</span><span /></div>

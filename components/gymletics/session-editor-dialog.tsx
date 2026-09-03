@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DecimalWeightInput } from './decimal-weight-input';
 import { EditableIntegerInput } from './editable-integer-input';
 import { uid } from '@/lib/gymletics/defaults';
+import { exerciseDefinitionLabel, exerciseIdentityKey, inferExerciseEquipment } from '@/lib/gymletics/exercise-library';
 import { buildExerciseLog } from '@/lib/gymletics/session-builder';
 import type {
   ExerciseLog,
@@ -81,7 +82,12 @@ export function SessionEditorDialog({
   const exerciseLibrary = useMemo(() => {
     const unique = new Map<string, PlanExercise>();
     data.plans.forEach((plan) => plan.days.forEach((day) => day.exercises.forEach((exercise) => {
-      const key = `${exercise.name.trim().toLocaleLowerCase('es')}|${exercise.unit}`;
+      const key = exercise.libraryExerciseId ?? exerciseIdentityKey({
+        name: exercise.name,
+        variant: exercise.variant ?? '',
+        equipment: exercise.equipment || inferExerciseEquipment(exercise.name, exercise.unit),
+        unit: exercise.unit,
+      });
       if (!unique.has(key)) unique.set(key, exercise);
     })));
     return [...unique.values()].sort((a, b) => a.name.localeCompare(b.name, 'es'));
@@ -143,6 +149,12 @@ export function SessionEditorDialog({
   function addExercise() {
     const exercise = exerciseLibrary.find((item) => item.id === exerciseToAdd);
     if (!exercise) return;
+    if (draft.exercises.some((item) => exercise.libraryExerciseId
+      ? item.libraryExerciseId === exercise.libraryExerciseId
+      : item.exerciseName === exercise.name && item.unit === exercise.unit)) {
+      setError('Este ejercicio y variante ya forman parte del entrenamiento.');
+      return;
+    }
     const sourcePlan = data.plans.find((plan) => plan.days.some((day) => day.exercises.some((item) => item.id === exercise.id)));
     const sourceDay = sourcePlan?.days.find((day) => day.exercises.some((item) => item.id === exercise.id));
     const sessionPlan = data.plans.find((plan) => plan.id === draft.planId) ?? sourcePlan ?? data.plans[0];
@@ -151,6 +163,7 @@ export function SessionEditorDialog({
     const log = buildExerciseLog(data, sessionPlan, sessionDay, exercise);
     setDraft((current) => ({ ...current, exercises: [...current.exercises, log] }));
     setExerciseToAdd('');
+    setError('');
   }
 
   function removeExercise(exerciseId: string) {
@@ -245,7 +258,7 @@ export function SessionEditorDialog({
             {draft.exercises.map((exercise) => (
               <section key={exercise.id} className="rounded-[20px] bg-black/4 p-3 dark:bg-white/6">
                 <div className="mb-3 flex items-start justify-between gap-3">
-                  <div className="min-w-0"><p className="truncate text-sm font-extrabold">{exercise.exerciseName}</p><p className="text-[10px] text-black/45 dark:text-white/45">{exercise.muscleGroup} · {exercise.unit}</p></div>
+                  <div className="min-w-0"><p className="truncate text-sm font-extrabold">{exerciseDefinitionLabel({ name: exercise.exerciseName, variant: exercise.variant ?? '' })}</p><p className="text-[10px] text-black/45 dark:text-white/45">{exercise.equipment} · {exercise.unit} · {exercise.muscleGroup}</p></div>
                   <Button type="button" aria-label={`Eliminar ${exercise.exerciseName}`} variant="ghost" size="icon-sm" className="shrink-0 text-red-600" disabled={draft.exercises.length <= 1} onClick={() => removeExercise(exercise.id)}><Trash2 /></Button>
                 </div>
 
@@ -279,7 +292,7 @@ export function SessionEditorDialog({
             <div className="grid grid-cols-[1fr_auto] gap-2">
               <Select value={exerciseToAdd} onValueChange={(value) => setExerciseToAdd(value ?? '')}>
                 <SelectTrigger className="h-10 min-w-0"><SelectValue placeholder="Elige de tus planes" /></SelectTrigger>
-                <SelectContent>{exerciseLibrary.map((exercise) => <SelectItem key={exercise.id} value={exercise.id}>{exercise.name} · {exercise.unit}</SelectItem>)}</SelectContent>
+                <SelectContent>{exerciseLibrary.map((exercise) => <SelectItem key={exercise.id} value={exercise.id}>{exerciseDefinitionLabel({ name: exercise.name, variant: exercise.variant ?? '' })} · {exercise.equipment} · {exercise.unit}</SelectItem>)}</SelectContent>
               </Select>
               <Button type="button" size="icon" disabled={!exerciseToAdd} onClick={addExercise}><Plus /></Button>
             </div>

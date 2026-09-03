@@ -1,4 +1,5 @@
 import type { GymleticsData, PlanExercise, RoutineDay, WorkoutPlan } from './types';
+import { reconcileExerciseLibrary } from './exercise-library';
 
 export function uid(prefix = 'id') {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`;
@@ -75,8 +76,9 @@ export function createStarterPlan(): WorkoutPlan {
 
 export function createDefaultData(): GymleticsData {
   const plan = createStarterPlan();
-  return {
-    version: 1,
+  return reconcileExerciseLibrary({
+    version: 2,
+    exerciseLibrary: [],
     plans: [plan],
     activePlanId: plan.id,
     nextDayByPlan: { [plan.id]: 0 },
@@ -85,5 +87,5 @@ export function createDefaultData(): GymleticsData {
     photos: [],
     calendarMarks: [],
     settings: { theme: 'light', sound: false, vibration: true },
-  };
+  });
 }
