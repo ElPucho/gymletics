@@ -5,6 +5,7 @@ import { Dumbbell } from 'lucide-react';
 
 import { CalendarScreen } from './calendar-screen';
 import { HomeScreen } from './home-screen';
+import { ExerciseLibraryScreen } from './exercise-library-screen';
 import { PlansScreen } from './plans-screen';
 import { ProgressScreen } from './progress-screen';
 import { BottomNav } from './shared';
@@ -72,6 +73,7 @@ export function GymleticsApp() {
           visible={view === 'workout'}
         />
         {view === 'plans' ? <PlansScreen data={data} updateData={updateData} /> : null}
+        {view === 'library' ? <ExerciseLibraryScreen data={data} updateData={updateData} /> : null}
         {view === 'progress' ? <ProgressScreen data={data} updateData={updateData} /> : null}
         {view === 'calendar' ? <CalendarScreen data={data} updateData={updateData} /> : null}
         {view === 'settings' ? <SettingsScreen data={data} updateData={updateData} onBack={() => changeView('home')} /> : null}

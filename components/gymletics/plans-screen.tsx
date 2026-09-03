@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from 'react';
 import {
-  BookOpen,
   Check,
   ChevronDown,
   ChevronUp,
@@ -45,7 +44,6 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { DecimalWeightInput } from './decimal-weight-input';
-import { ExerciseLibraryDialog } from './exercise-library-dialog';
 import { ScreenHeader, SectionTitle } from './shared';
 import { uid } from '@/lib/gymletics/defaults';
 import {
@@ -109,7 +107,6 @@ export function PlansScreen({
   const [dayFocus, setDayFocus] = useState('');
   const [cardioMinutes, setCardioMinutes] = useState(20);
   const [exerciseDialogOpen, setExerciseDialogOpen] = useState(false);
-  const [libraryDialogOpen, setLibraryDialogOpen] = useState(false);
   const [editingExerciseId, setEditingExerciseId] = useState<string | null>(null);
   const [exerciseDraft, setExerciseDraft] = useState<ExerciseDraft>(emptyExercise);
   const [exerciseError, setExerciseError] = useState('');
@@ -409,7 +406,7 @@ export function PlansScreen({
       <ScreenHeader
         title="Planes"
         subtitle={`${data.plans.length} guardado${data.plans.length === 1 ? '' : 's'}`}
-        action={<div className="flex items-center gap-1"><Button size="sm" variant="outline" className="rounded-full" onClick={() => setLibraryDialogOpen(true)}><BookOpen /> Biblioteca</Button><Button size="sm" className="rounded-full" onClick={openNewPlan}><Plus /> Plan</Button></div>}
+        action={<Button size="sm" className="rounded-full" onClick={openNewPlan}><Plus /> Plan</Button>}
       />
 
       <div className="space-y-6 px-4 pt-4">
@@ -601,8 +598,6 @@ export function PlansScreen({
           <DialogFooter><Button variant="outline" onClick={() => setExerciseDialogOpen(false)}>Cancelar</Button><Button onClick={saveExercise}>Guardar ejercicio</Button></DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <ExerciseLibraryDialog data={data} updateData={updateData} open={libraryDialogOpen} onOpenChange={setLibraryDialogOpen} />
     </div>
   );
 }

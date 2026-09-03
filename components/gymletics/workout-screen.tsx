@@ -33,7 +33,7 @@ import { DecimalWeightInput } from './decimal-weight-input';
 import { EditableIntegerInput } from './editable-integer-input';
 import { ScreenHeader } from './shared';
 import { uid } from '@/lib/gymletics/defaults';
-import { exerciseDefinitionLabel, exerciseIdentityKey, inferExerciseEquipment } from '@/lib/gymletics/exercise-library';
+import { exerciseDefinitionLabel, exerciseIdentityKey, exerciseLogMatchesDefinition, inferExerciseEquipment } from '@/lib/gymletics/exercise-library';
 import { recommendWeight } from '@/lib/gymletics/progression';
 import { buildExerciseLog } from '@/lib/gymletics/session-builder';
 import { formatWeight } from '@/lib/gymletics/weight-format';
@@ -521,6 +521,9 @@ export function WorkoutScreen({
   const currentLog = activeSession.exercises[exerciseIndex];
   const currentPlanExercise = exerciseLibrary.find((item) => item.id === currentLog?.planExerciseId)
     ?? exerciseLibrary.find((item) => planExerciseMatchesLog(item, currentLog));
+  const currentDefinition = currentLog.libraryExerciseId
+    ? data.exerciseLibrary.find((item) => item.id === currentLog.libraryExerciseId)
+    : data.exerciseLibrary.find((item) => exerciseLogMatchesDefinition(currentLog, item));
   const completedExerciseCount = activeSession.exercises.filter((exercise) => exercise.sets.filter((set) => set.type === 'work').every((set) => set.completed)).length;
   const sessionProgress = activeSession.exercises.length ? Math.round((completedExerciseCount / activeSession.exercises.length) * 100) : 0;
   const workCompleted = currentLog?.sets.filter((set) => set.type === 'work').every((set) => set.completed) ?? false;
@@ -566,6 +569,7 @@ export function WorkoutScreen({
           <div className="mb-2 flex items-center gap-2"><Badge variant="secondary">{currentLog.muscleGroup}</Badge><Badge variant="outline">{currentPlanExercise?.technique ?? currentLog.technique}</Badge></div>
           <h1 className="text-[34px] font-black leading-[1.02] tracking-[-0.055em]">{exerciseDefinitionLabel({ name: currentLog.exerciseName, variant: currentLog.variant ?? '' })}</h1>
           <p className="mt-1 text-xs font-semibold text-black/45 dark:text-white/45">{currentLog.equipment || 'Equipo sin indicar'} · {currentLog.unit}</p>
+          {currentDefinition?.mediaDataUrl ? <div className="mt-4 h-56 w-full rounded-[20px] bg-black/5 bg-contain bg-center bg-no-repeat dark:bg-white/5" style={{ backgroundImage: `url(${currentDefinition.mediaDataUrl})` }}><span className="sr-only">Demostración de {exerciseDefinitionLabel(currentDefinition)}</span></div> : null}
           {currentPlanExercise ? (
             <div className="mt-4 flex items-start gap-3 rounded-[18px] bg-black p-3.5 text-white dark:bg-white dark:text-black">
               <Sparkles className="mt-0.5 size-4 shrink-0" />

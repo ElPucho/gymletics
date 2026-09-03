@@ -86,7 +86,11 @@ export async function exportExcel(data: GymleticsData) {
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(sessions), 'Sesiones');
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(records), 'Registros');
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(rowsFromData(data)), 'Series_DB');
-  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.exerciseLibrary), 'Biblioteca');
+  const library = data.exerciseLibrary.map(({ mediaDataUrl, ...exercise }) => ({
+    ...exercise,
+    Multimedia: mediaDataUrl ? 'Sí' : 'No',
+  }));
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(library), 'Biblioteca');
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.bodyMetrics), 'Mediciones');
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.calendarMarks), 'Calendario');
   XLSX.writeFile(workbook, `gymletics-${today()}.xlsx`, { compression: true });

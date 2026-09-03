@@ -25,6 +25,8 @@ export interface ExerciseDefinition {
   equipment: string;
   muscleGroup: string;
   unit: WeightUnit;
+  mediaDataUrl?: string;
+  mediaFileName?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -143,7 +145,7 @@ export interface GymleticsData {
   settings: AppSettings;
 }
 
-export type AppView = 'home' | 'workout' | 'plans' | 'progress' | 'calendar' | 'settings';
+export type AppView = 'home' | 'workout' | 'plans' | 'library' | 'progress' | 'calendar' | 'settings';
 
 export interface ExerciseRecommendation {
   weight: number;

@@ -141,6 +141,10 @@ export function reconcileExerciseLibrary(value: StoredGymleticsData): GymleticsD
     }, stored.id);
     definition.createdAt = stored.createdAt || definition.createdAt;
     definition.updatedAt = stored.updatedAt || definition.updatedAt;
+    if (!definition.mediaDataUrl && stored.mediaDataUrl) {
+      definition.mediaDataUrl = stored.mediaDataUrl;
+      definition.mediaFileName = stored.mediaFileName;
+    }
   }
 
   const planExerciseLinks = new Map<string, string>();

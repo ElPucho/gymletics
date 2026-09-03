@@ -5,6 +5,7 @@ import {
   CalendarDays,
   ChartNoAxesColumnIncreasing,
   ChevronLeft,
+  BookOpen,
   Dumbbell,
   Home,
   Layers3,
@@ -58,6 +59,7 @@ const navItems: Array<{ view: AppView; label: string; icon: LucideIcon }> = [
   { view: 'home', label: 'Inicio', icon: Home },
   { view: 'workout', label: 'Entrenar', icon: Dumbbell },
   { view: 'plans', label: 'Planes', icon: Layers3 },
+  { view: 'library', label: 'Biblioteca', icon: BookOpen },
   { view: 'progress', label: 'Progreso', icon: ChartNoAxesColumnIncreasing },
   { view: 'calendar', label: 'Calendario', icon: CalendarDays },
 ];
@@ -65,7 +67,7 @@ const navItems: Array<{ view: AppView; label: string; icon: LucideIcon }> = [
 export function BottomNav({ active, onChange }: { active: AppView; onChange: (view: AppView) => void }) {
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-[480px] border-t border-black/8 bg-[#f8f8f5]/94 px-2 pb-[max(0.6rem,env(safe-area-inset-bottom))] pt-1.5 backdrop-blur-xl dark:border-white/10 dark:bg-[#151515]/94">
-      <div className="grid grid-cols-5">
+      <div className="grid grid-cols-6">
         {navItems.map(({ view, label, icon: Icon }) => {
           const isActive = active === view || (view === 'workout' && active === 'workout');
           return (
