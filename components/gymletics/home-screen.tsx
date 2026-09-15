@@ -101,7 +101,7 @@ export function HomeScreen({
 
   return (
     <div className="pb-24">
-      <section className="relative overflow-hidden bg-[#080808] px-5 pb-8 pt-[max(1.25rem,env(safe-area-inset-top))] text-white">
+      <section className="gym-safe-top-roomy relative overflow-hidden bg-[#080808] px-5 pb-8 text-white">
         <div className="absolute -right-24 top-10 h-56 w-56 rounded-full border border-white/10" />
         <div className="absolute -right-10 top-24 h-32 w-32 rounded-full border border-white/10" />
         <header className="relative flex items-center justify-between">

@@ -48,7 +48,7 @@ export function GymleticsApp() {
   return (
     <main className="min-h-dvh bg-[#080808] text-white">
       <PwaRegister />
-      <div className="mx-auto min-h-dvh w-full max-w-[480px] overflow-hidden bg-[#f4f4f1] text-[#101010] shadow-2xl transition-colors dark:bg-[#111] dark:text-white">
+      <div className="mx-auto min-h-dvh w-full max-w-[480px] overflow-x-clip bg-[#f4f4f1] text-[#101010] shadow-2xl transition-colors dark:bg-[#111] dark:text-white">
         {view === 'home' ? (
           <HomeScreen
             data={data}

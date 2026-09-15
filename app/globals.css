@@ -79,6 +79,7 @@
 }
 
 :root {
+  --gym-safe-top: env(safe-area-inset-top, 0px);
   --font-app-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif;
   --font-app-display: 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;
   --background: oklch(0.965 0.005 95);
@@ -156,6 +157,14 @@
 }
 
 @layer components {
+  .gym-safe-top {
+    padding-top: calc(var(--gym-safe-top) + 0.75rem);
+  }
+
+  .gym-safe-top-roomy {
+    padding-top: calc(var(--gym-safe-top) + 1.25rem);
+  }
+
   .gym-date-input {
     display: block;
     inline-size: 100% !important;

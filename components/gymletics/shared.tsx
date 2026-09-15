@@ -38,7 +38,7 @@ export function ScreenHeader({
   action?: React.ReactNode;
 }) {
   return (
-    <header className="sticky top-0 z-20 border-b border-black/6 bg-[#f4f4f1]/92 px-4 pb-3 pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur-xl dark:border-white/8 dark:bg-[#111]/92">
+    <header className="gym-safe-top sticky top-0 z-30 border-b border-black/6 bg-[#f4f4f1]/92 px-4 pb-3 backdrop-blur-xl dark:border-white/8 dark:bg-[#111]/92">
       <div className="flex min-h-10 items-center gap-3">
         {onBack ? (
           <Button aria-label="Volver" variant="ghost" size="icon" className="-ml-2 rounded-full" onClick={onBack}>

@@ -77,6 +77,48 @@ function reindexSets(sets: SetLog[]) {
   }));
 }
 
+interface VisibleViewport {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  keyboardVisible: boolean;
+}
+
+function readVisibleViewport() {
+  const viewport = window.visualViewport;
+  if (!viewport) {
+    return { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+  }
+  return {
+    left: Math.round(viewport.offsetLeft),
+    top: Math.round(viewport.offsetTop),
+    width: Math.round(viewport.width),
+    height: Math.round(viewport.height),
+  };
+}
+
+function isTextEntryElement(element: Element | null) {
+  return element instanceof HTMLInputElement
+    || element instanceof HTMLTextAreaElement
+    || (element instanceof HTMLElement && element.isContentEditable);
+}
+
+function clampTimerToViewport(
+  x: number,
+  y: number,
+  element: HTMLOutputElement,
+  viewport: Omit<VisibleViewport, 'keyboardVisible'>,
+) {
+  const margin = 8;
+  const minimumX = viewport.left + margin;
+  const minimumY = viewport.top + margin;
+  return {
+    x: Math.min(Math.max(minimumX, x), Math.max(minimumX, viewport.left + viewport.width - element.offsetWidth - margin)),
+    y: Math.min(Math.max(minimumY, y), Math.max(minimumY, viewport.top + viewport.height - element.offsetHeight - margin)),
+  };
+}
+
 export function WorkoutScreen({
   data,
   plan,
@@ -114,7 +156,9 @@ export function WorkoutScreen({
   const wakeLock = useRef<{ release: () => Promise<void> } | null>(null);
   const timerElement = useRef<HTMLOutputElement | null>(null);
   const timerDrag = useRef<{ pointerId: number; offsetX: number; offsetY: number } | null>(null);
+  const viewportBaseline = useRef<{ width: number; height: number } | null>(null);
   const [timerPosition, setTimerPosition] = useState<{ x: number; y: number } | null>(null);
+  const [visibleViewport, setVisibleViewport] = useState<VisibleViewport | null>(null);
 
   const exerciseLibrary = useMemo(() => {
     const unique = new Map<string, RoutineDay['exercises'][number]>();
@@ -183,19 +227,71 @@ export function WorkoutScreen({
   }, [data.settings.vibration, timer, timerRunning]);
 
   useEffect(() => {
-    function keepTimerInBounds() {
-      setTimerPosition((current) => {
-        const element = timerElement.current;
-        if (!current || !element) return current;
-        const margin = 8;
-        return {
-          x: Math.min(Math.max(margin, current.x), Math.max(margin, window.innerWidth - element.offsetWidth - margin)),
-          y: Math.min(Math.max(margin, current.y), Math.max(margin, window.innerHeight - element.offsetHeight - margin)),
-        };
+    const visualViewport = window.visualViewport;
+    let animationFrame = 0;
+    let focusTimeout = 0;
+
+    function syncVisibleViewport() {
+      window.cancelAnimationFrame(animationFrame);
+      animationFrame = window.requestAnimationFrame(() => {
+        const bounds = readVisibleViewport();
+        const baseline = viewportBaseline.current;
+        if (!baseline || Math.abs(baseline.width - bounds.width) > 80) {
+          viewportBaseline.current = { width: bounds.width, height: bounds.height };
+        } else {
+          baseline.height = Math.max(baseline.height, bounds.height);
+        }
+
+        const maximumHeight = viewportBaseline.current?.height ?? bounds.height;
+        const viewportShrankForKeyboard = maximumHeight - bounds.height > 120;
+        const inputHasFocus = isTextEntryElement(document.activeElement);
+        const coarsePointer = window.matchMedia?.('(pointer: coarse)').matches ?? false;
+        const keyboardVisible = viewportShrankForKeyboard || (inputHasFocus && coarsePointer);
+        const nextViewport = { ...bounds, keyboardVisible };
+
+        setVisibleViewport((current) => current
+          && current.left === nextViewport.left
+          && current.top === nextViewport.top
+          && current.width === nextViewport.width
+          && current.height === nextViewport.height
+          && current.keyboardVisible === nextViewport.keyboardVisible
+          ? current
+          : nextViewport);
+
+        if (!keyboardVisible) {
+          setTimerPosition((current) => {
+            const element = timerElement.current;
+            if (!current || !element) return current;
+            const next = clampTimerToViewport(current.x, current.y, element, bounds);
+            return next.x === current.x && next.y === current.y ? current : next;
+          });
+        }
       });
     }
-    window.addEventListener('resize', keepTimerInBounds);
-    return () => window.removeEventListener('resize', keepTimerInBounds);
+
+    function syncAfterFocusChange() {
+      window.clearTimeout(focusTimeout);
+      focusTimeout = window.setTimeout(syncVisibleViewport, 80);
+    }
+
+    syncVisibleViewport();
+    window.addEventListener('resize', syncVisibleViewport);
+    window.addEventListener('orientationchange', syncVisibleViewport);
+    visualViewport?.addEventListener('resize', syncVisibleViewport);
+    visualViewport?.addEventListener('scroll', syncVisibleViewport);
+    document.addEventListener('focusin', syncVisibleViewport);
+    document.addEventListener('focusout', syncAfterFocusChange);
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      window.clearTimeout(focusTimeout);
+      window.removeEventListener('resize', syncVisibleViewport);
+      window.removeEventListener('orientationchange', syncVisibleViewport);
+      visualViewport?.removeEventListener('resize', syncVisibleViewport);
+      visualViewport?.removeEventListener('scroll', syncVisibleViewport);
+      document.removeEventListener('focusin', syncVisibleViewport);
+      document.removeEventListener('focusout', syncAfterFocusChange);
+    };
   }, []);
 
   const activeSessionId = activeSession?.id;
@@ -407,11 +503,7 @@ export function WorkoutScreen({
   function boundedTimerPosition(x: number, y: number) {
     const element = timerElement.current;
     if (!element) return { x, y };
-    const margin = 8;
-    return {
-      x: Math.min(Math.max(margin, x), Math.max(margin, window.innerWidth - element.offsetWidth - margin)),
-      y: Math.min(Math.max(margin, y), Math.max(margin, window.innerHeight - element.offsetHeight - margin)),
-    };
+    return clampTimerToViewport(x, y, element, readVisibleViewport());
   }
 
   function startTimerDrag(event: React.PointerEvent<HTMLButtonElement>) {
@@ -527,11 +619,23 @@ export function WorkoutScreen({
   const completedExerciseCount = activeSession.exercises.filter((exercise) => exercise.sets.filter((set) => set.type === 'work').every((set) => set.completed)).length;
   const sessionProgress = activeSession.exercises.length ? Math.round((completedExerciseCount / activeSession.exercises.length) * 100) : 0;
   const workCompleted = currentLog?.sets.filter((set) => set.type === 'work').every((set) => set.completed) ?? false;
+  const keyboardTimerVisible = visibleViewport?.keyboardVisible ?? false;
+  const keyboardTimerWidth = visibleViewport ? Math.min(456, Math.max(0, visibleViewport.width - 16)) : 0;
+  const timerStyle = keyboardTimerVisible && visibleViewport
+    ? {
+        left: visibleViewport.left + Math.max(8, (visibleViewport.width - keyboardTimerWidth) / 2),
+        top: `calc(${visibleViewport.top + 8}px + var(--gym-safe-top))`,
+        width: keyboardTimerWidth,
+        maxWidth: keyboardTimerWidth,
+      }
+    : timerPosition
+      ? { left: timerPosition.x, top: timerPosition.y }
+      : undefined;
 
   if (finishMode) {
     const totalSets = activeSession.exercises.reduce((sum, exercise) => sum + exercise.sets.filter((set) => set.completed).length, 0);
     return (
-      <div className={visible ? 'min-h-dvh bg-black px-5 pb-8 pt-[max(2rem,env(safe-area-inset-top))] text-white' : 'hidden'}>
+      <div className={visible ? 'gym-safe-top-roomy min-h-dvh bg-black px-5 pb-8 text-white' : 'hidden'}>
         <div className="mx-auto flex min-h-[80dvh] max-w-sm flex-col justify-center">
           <div className="grid size-16 place-items-center rounded-full bg-white text-black"><Trophy className="size-7" /></div>
           <p className="mt-8 text-xs font-bold uppercase tracking-[0.18em] text-white/45">Entrenamiento listo</p>
@@ -555,7 +659,7 @@ export function WorkoutScreen({
   return (
     <>
       <div className={visible ? 'pb-28' : 'hidden'}>
-      <header className="sticky top-0 z-30 border-b border-black/6 bg-[#f4f4f1]/94 px-4 pb-3 pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur-xl dark:border-white/8 dark:bg-[#111]/94">
+      <header className="gym-safe-top sticky top-0 z-40 border-b border-black/6 bg-[#f4f4f1]/94 px-4 pb-3 backdrop-blur-xl dark:border-white/8 dark:bg-[#111]/94">
         <div className="flex items-center justify-between gap-3">
           <Button aria-label="Descartar entrenamiento" variant="ghost" size="icon" className="rounded-full text-red-600" onClick={discardWorkout}><Trash2 /></Button>
           <div className="text-center"><p className="text-[10px] font-bold uppercase tracking-widest text-black/40 dark:text-white/40">{activeSession.dayName}</p><p className="text-sm font-extrabold">Ejercicio {exerciseIndex + 1} de {activeSession.exercises.length}</p></div>
@@ -643,28 +747,30 @@ export function WorkoutScreen({
         <output
           ref={timerElement}
           aria-live="polite"
-          className={`fixed z-50 block w-[calc(100%-1.5rem)] max-w-[456px] rounded-[24px] border border-white/10 bg-black/96 p-4 pt-2 text-white shadow-[0_18px_55px_rgba(0,0,0,0.42)] backdrop-blur-xl ${timerPosition ? '' : 'inset-x-0 top-[calc(4.75rem+env(safe-area-inset-top))] mx-auto'}`}
-          style={timerPosition ? { left: timerPosition.x, top: timerPosition.y } : undefined}
+          className={`fixed z-[80] block w-[calc(100%-1.5rem)] max-w-[456px] border border-white/10 bg-black/96 text-white shadow-[0_18px_55px_rgba(0,0,0,0.42)] backdrop-blur-xl ${keyboardTimerVisible ? 'rounded-[18px] p-2' : 'rounded-[24px] p-4 pt-2'} ${timerPosition || keyboardTimerVisible ? '' : 'inset-x-0 top-[calc(4.75rem+var(--gym-safe-top))] mx-auto'}`}
+          style={timerStyle}
         >
-          <button
-            type="button"
-            aria-label="Mover temporizador"
-            className="mb-1 flex w-full touch-none cursor-grab select-none items-center justify-center gap-1 rounded-full py-1 text-[10px] font-bold uppercase tracking-wider text-white/35 active:cursor-grabbing active:text-white/65"
-            onPointerDown={startTimerDrag}
-            onPointerMove={moveTimer}
-            onPointerUp={stopTimerDrag}
-            onPointerCancel={stopTimerDrag}
-            onKeyDown={moveTimerWithKeyboard}
-          >
-            <GripHorizontal className="size-4" /> Arrastra para mover
-          </button>
-          <div className="flex items-center gap-3">
-            <div className="grid size-14 shrink-0 place-items-center rounded-full bg-white text-xl font-black text-black tabular-nums">{Math.floor(timer / 60)}:{String(timer % 60).padStart(2, '0')}</div>
-            <div className="min-w-0 flex-1"><p className="text-sm font-extrabold">{timerMode === 'rest-pause' ? 'Descanso rest-pause' : 'Descanso'}</p><p className="truncate text-xs text-white/45">{timerMode === 'rest-pause' ? '10 segundos antes del siguiente bloque' : 'Respira y prepara la siguiente serie'}</p></div>
+          {!keyboardTimerVisible ? (
+            <button
+              type="button"
+              aria-label="Mover temporizador"
+              className="mb-1 flex w-full touch-none cursor-grab select-none items-center justify-center gap-1 rounded-full py-1 text-[10px] font-bold uppercase tracking-wider text-white/35 active:cursor-grabbing active:text-white/65"
+              onPointerDown={startTimerDrag}
+              onPointerMove={moveTimer}
+              onPointerUp={stopTimerDrag}
+              onPointerCancel={stopTimerDrag}
+              onKeyDown={moveTimerWithKeyboard}
+            >
+              <GripHorizontal className="size-4" /> Arrastra para mover
+            </button>
+          ) : null}
+          <div className={`flex items-center ${keyboardTimerVisible ? 'gap-2' : 'gap-3'}`}>
+            <div className={`grid shrink-0 place-items-center rounded-full bg-white font-black text-black tabular-nums ${keyboardTimerVisible ? 'size-11 text-base' : 'size-14 text-xl'}`}>{Math.floor(timer / 60)}:{String(timer % 60).padStart(2, '0')}</div>
+            <div className="min-w-0 flex-1"><p className="truncate text-sm font-extrabold">{timerMode === 'rest-pause' ? 'Descanso rest-pause' : 'Descanso'}</p>{!keyboardTimerVisible ? <p className="truncate text-xs text-white/45">{timerMode === 'rest-pause' ? '10 segundos antes del siguiente bloque' : 'Respira y prepara la siguiente serie'}</p> : null}</div>
             <Button aria-label={timerRunning ? 'Pausar temporizador' : 'Continuar temporizador'} variant="outline" size="icon" className="rounded-full border-white/15 bg-white/10 text-white hover:bg-white/20" onClick={() => setTimerRunning((current) => !current)}>{timerRunning ? <Pause /> : <Play />}</Button>
             <Button aria-label="Saltar descanso" variant="outline" size="icon" className="rounded-full border-white/15 bg-white/10 text-white hover:bg-white/20" onClick={() => { setTimer(0); setTimerRunning(false); }}><SkipForward /></Button>
           </div>
-          <div className="mt-3 grid grid-cols-2 divide-x divide-white/10 text-xs font-bold text-white/55"><button type="button" className="py-1 text-center" onClick={() => { setTimer((current) => current + 30); setTimerRunning(true); }}>+ 30 segundos</button><button type="button" className="flex items-center justify-center gap-1.5 py-1 text-center disabled:opacity-30" disabled={!lastSetAction} onClick={undoLastSet}><RotateCcw className="size-3.5" /> Deshacer serie</button></div>
+          {!keyboardTimerVisible ? <div className="mt-3 grid grid-cols-2 divide-x divide-white/10 text-xs font-bold text-white/55"><button type="button" className="py-1 text-center" onClick={() => { setTimer((current) => current + 30); setTimerRunning(true); }}>+ 30 segundos</button><button type="button" className="flex items-center justify-center gap-1.5 py-1 text-center disabled:opacity-30" disabled={!lastSetAction} onClick={undoLastSet}><RotateCcw className="size-3.5" /> Deshacer serie</button></div> : null}
         </output>
       ) : null}
     </>
