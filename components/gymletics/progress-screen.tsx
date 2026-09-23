@@ -40,14 +40,18 @@ import { uid } from '@/lib/gymletics/defaults';
 import { formatWeight } from '@/lib/gymletics/weight-format';
 import type { GymleticsData, PhotoPose, ProgressPhoto } from '@/lib/gymletics/types';
 const bodyChart = {
-  weight: { label: 'Peso', theme: { light: '#111111', dark: '#f5f5f5' } },
-  fat: { label: '% grasa', theme: { light: '#777777', dark: '#a3a3a3' } },
-  muscle: { label: '% musculatura', theme: { light: '#bbbbbb', dark: '#666666' } },
+  weight: { label: 'Peso corporal', theme: { light: '#111111', dark: '#f5f5f5' } },
+  fatMass: { label: 'Masa grasa', theme: { light: '#737373', dark: '#c4c4c4' } },
+  muscleMass: { label: 'Masa muscular', theme: { light: '#a3a3a3', dark: '#8a8a8a' } },
 } satisfies ChartConfig;
 const adherenceChart = {
   completed: { label: 'Completados', theme: { light: '#111111', dark: '#f5f5f5' } },
   missed: { label: 'Incumplidos', theme: { light: '#c8c8c8', dark: '#575757' } },
 } satisfies ChartConfig;
+
+function massFromPercentage(weight: number, percentage: number) {
+  return weight * percentage / 100;
+}
 
 async function compressImage(file: File): Promise<string> {
   const source = await new Promise<string>((resolve, reject) => {
@@ -93,7 +97,12 @@ export function ProgressScreen({
 
   const bodyData = [...data.bodyMetrics]
     .sort((a, b) => a.date.localeCompare(b.date))
-    .map((metric) => ({ label: format(new Date(`${metric.date}T12:00:00`), 'dd/MM'), weight: metric.weight, fat: metric.fatPercent, muscle: metric.musclePercent }));
+    .map((metric) => ({
+      label: format(new Date(`${metric.date}T12:00:00`), 'dd/MM'),
+      weight: metric.weight,
+      fatMass: massFromPercentage(metric.weight, metric.fatPercent),
+      muscleMass: massFromPercentage(metric.weight, metric.musclePercent),
+    }));
   const latestBody = [...data.bodyMetrics].sort((a, b) => b.date.localeCompare(a.date))[0];
   const bodyPrevious = [...data.bodyMetrics].sort((a, b) => b.date.localeCompare(a.date))[1];
   const photos = [...data.photos].sort((a, b) => a.date.localeCompare(b.date));
@@ -158,11 +167,36 @@ export function ProgressScreen({
             <Button className="h-11 w-full rounded-full" onClick={() => setMetricDialogOpen(true)}><Plus /> Registrar medición</Button>
             {latestBody ? (
               <>
-                <section className="grid grid-cols-3 gap-2"><Stat icon={Scale} label="Peso" value={`${formatWeight(latestBody.weight)} kg`} delta={bodyPrevious ? latestBody.weight - bodyPrevious.weight : undefined} /><Stat icon={Target} label="Grasa" value={`${latestBody.fatPercent}%`} delta={bodyPrevious ? latestBody.fatPercent - bodyPrevious.fatPercent : undefined} /><Stat icon={Dumbbell} label="Músculo" value={`${latestBody.musclePercent}%`} delta={bodyPrevious ? latestBody.musclePercent - bodyPrevious.musclePercent : undefined} /></section>
-                <Card className="rounded-[24px] bg-white py-4 ring-black/6 dark:bg-[#1c1c1c] dark:ring-white/10"><CardContent className="px-2"><p className="px-3 text-sm font-extrabold">Composición corporal</p><ChartContainer config={bodyChart} className="mt-3 h-[240px] w-full"><LineChart data={bodyData} margin={{ left: 0, right: 12, top: 12 }}><CartesianGrid vertical={false} strokeDasharray="3 5" /><XAxis dataKey="label" tickLine={false} axisLine={false} /><YAxis hide /><ChartTooltip content={<ChartTooltipContent valueFormatter={(value, name) => typeof value === 'number' ? name === 'weight' ? `${formatWeight(value)} kg` : `${formatWeight(value)} %` : String(value)} />} /><Line dataKey="weight" stroke="var(--color-weight)" strokeWidth={3} dot={{ r: 3 }} /><Line dataKey="fat" stroke="var(--color-fat)" strokeWidth={2} dot={false} /><Line dataKey="muscle" stroke="var(--color-muscle)" strokeWidth={2} dot={false} /></LineChart></ChartContainer></CardContent></Card>
-                <div className="space-y-2">{[...data.bodyMetrics].sort((a, b) => b.date.localeCompare(a.date)).map((metric) => <Card key={metric.id} className="rounded-[18px] bg-white py-3 ring-black/6 dark:bg-[#1c1c1c] dark:ring-white/10"><CardContent className="flex items-center gap-3 px-3"><div className="grid size-10 place-items-center rounded-full bg-black text-xs font-black text-white dark:bg-white dark:text-black">{format(new Date(`${metric.date}T12:00:00`), 'dd')}</div><div className="flex-1"><p className="text-sm font-extrabold">{formatWeight(metric.weight)} kg</p><p className="text-xs text-black/45 dark:text-white/45">Grasa {metric.fatPercent}% · Músculo {metric.musclePercent}%</p></div><Button aria-label="Eliminar medición" variant="ghost" size="icon-sm" className="text-red-600" onClick={() => updateData((current) => ({ ...current, bodyMetrics: current.bodyMetrics.filter((item) => item.id !== metric.id) }))}><Trash2 /></Button></CardContent></Card>)}</div>
+                <section className="grid grid-cols-3 gap-2">
+                  <Stat icon={Scale} label="Peso" value={`${formatWeight(latestBody.weight)} kg`} delta={bodyPrevious ? latestBody.weight - bodyPrevious.weight : undefined} deltaUnit="kg" />
+                  <Stat icon={Target} label="Masa grasa" value={`${formatWeight(massFromPercentage(latestBody.weight, latestBody.fatPercent))} kg`} delta={bodyPrevious ? massFromPercentage(latestBody.weight, latestBody.fatPercent) - massFromPercentage(bodyPrevious.weight, bodyPrevious.fatPercent) : undefined} deltaUnit="kg" />
+                  <Stat icon={Dumbbell} label="Masa muscular" value={`${formatWeight(massFromPercentage(latestBody.weight, latestBody.musclePercent))} kg`} delta={bodyPrevious ? massFromPercentage(latestBody.weight, latestBody.musclePercent) - massFromPercentage(bodyPrevious.weight, bodyPrevious.musclePercent) : undefined} deltaUnit="kg" />
+                </section>
+                <Card className="rounded-[24px] bg-white py-4 ring-black/6 dark:bg-[#1c1c1c] dark:ring-white/10">
+                  <CardContent className="min-w-0 px-2">
+                    <p className="px-3 text-sm font-extrabold">Composición corporal · kg</p>
+                    <p className="mt-0.5 px-3 text-xs text-black/45 dark:text-white/45">Grasa y musculatura calculadas con el peso y los porcentajes registrados.</p>
+                    <ChartContainer config={bodyChart} className="mt-2 h-[270px] min-w-0 w-full overflow-visible">
+                      <LineChart data={bodyData} margin={{ left: 4, right: 16, top: 16, bottom: 12 }}>
+                        <CartesianGrid vertical={false} strokeDasharray="3 5" />
+                        <XAxis dataKey="label" tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={22} tick={{ fontSize: 11 }} tickMargin={8} />
+                        <YAxis width={46} tickLine={false} axisLine={false} tickMargin={6} tick={{ fontSize: 10 }} tickFormatter={(value: number) => formatWeight(value)} domain={[0, 'auto']} />
+                        <ChartTooltip content={<ChartTooltipContent valueFormatter={(value, name) => typeof value === 'number' ? `${formatWeight(value)} kg` : String(value)} />} />
+                        <Line dataKey="weight" type="monotone" stroke="var(--color-weight)" strokeWidth={3} dot={{ r: 2.5 }} />
+                        <Line dataKey="fatMass" type="monotone" stroke="var(--color-fatMass)" strokeWidth={2.5} strokeDasharray="6 4" dot={{ r: 2 }} />
+                        <Line dataKey="muscleMass" type="monotone" stroke="var(--color-muscleMass)" strokeWidth={2.5} strokeDasharray="2 3" dot={{ r: 2 }} />
+                      </LineChart>
+                    </ChartContainer>
+                    <div className="mt-1 flex flex-wrap justify-center gap-x-4 gap-y-2 px-3">
+                      <MetricLegend color="var(--color-weight)" label="Peso corporal" />
+                      <MetricLegend color="var(--color-fatMass)" label="Masa grasa" dashed />
+                      <MetricLegend color="var(--color-muscleMass)" label="Masa muscular" dotted />
+                    </div>
+                  </CardContent>
+                </Card>
+                <div className="space-y-2">{[...data.bodyMetrics].sort((a, b) => b.date.localeCompare(a.date)).map((metric) => <Card key={metric.id} className="rounded-[18px] bg-white py-3 ring-black/6 dark:bg-[#1c1c1c] dark:ring-white/10"><CardContent className="flex items-center gap-3 px-3"><div className="grid size-10 place-items-center rounded-full bg-black text-xs font-black text-white dark:bg-white dark:text-black">{format(new Date(`${metric.date}T12:00:00`), 'dd')}</div><div className="min-w-0 flex-1"><p className="text-sm font-extrabold">{formatWeight(metric.weight)} kg</p><p className="text-xs text-black/45 dark:text-white/45">Grasa {formatWeight(massFromPercentage(metric.weight, metric.fatPercent))} kg · Músculo {formatWeight(massFromPercentage(metric.weight, metric.musclePercent))} kg</p></div><Button aria-label="Eliminar medición" variant="ghost" size="icon-sm" className="text-red-600" onClick={() => updateData((current) => ({ ...current, bodyMetrics: current.bodyMetrics.filter((item) => item.id !== metric.id) }))}><Trash2 /></Button></CardContent></Card>)}</div>
               </>
-            ) : <EmptyState icon={Scale} title="Registra tu punto de partida" description="Añade peso, porcentaje de grasa y porcentaje de musculatura." action={<Button onClick={() => setMetricDialogOpen(true)}>Añadir medición</Button>} />}
+            ) : <EmptyState icon={Scale} title="Registra tu punto de partida" description="Añade tu peso y los porcentajes de grasa y musculatura. La app mostrará sus masas estimadas en kg." action={<Button onClick={() => setMetricDialogOpen(true)}>Añadir medición</Button>} />}
           </TabsContent>
 
           <TabsContent value="photos" className="mt-5 space-y-4">
@@ -178,20 +212,27 @@ export function ProgressScreen({
 
           <TabsContent value="adherence" className="mt-5 space-y-4">
             <section className="grid grid-cols-2 gap-2"><Stat icon={Dumbbell} label="Sesiones totales" value={String(data.sessions.filter((session) => session.status === 'completed').length)} /><Stat icon={Target} label="Incumplidas" value={String(data.calendarMarks.filter((mark) => mark.status === 'missed').length)} /></section>
-            <Card className="rounded-[24px] bg-white py-4 ring-black/6 dark:bg-[#1c1c1c] dark:ring-white/10"><CardContent className="px-2"><p className="px-3 text-sm font-extrabold">Frecuencia mensual</p><ChartContainer config={adherenceChart} className="mt-3 h-[240px] w-full"><BarChart data={adherenceData} margin={{ left: 4, right: 8, top: 10 }}><CartesianGrid vertical={false} strokeDasharray="3 5" /><XAxis dataKey="month" tickLine={false} axisLine={false} /><YAxis hide allowDecimals={false} /><ChartTooltip content={<ChartTooltipContent />} /><Bar dataKey="completed" fill="var(--color-completed)" radius={[6, 6, 0, 0]} /><Bar dataKey="missed" fill="var(--color-missed)" radius={[6, 6, 0, 0]} /></BarChart></ChartContainer></CardContent></Card>
+            <Card className="rounded-[24px] bg-white py-4 ring-black/6 dark:bg-[#1c1c1c] dark:ring-white/10"><CardContent className="min-w-0 px-2"><p className="px-3 text-sm font-extrabold">Frecuencia mensual</p><ChartContainer config={adherenceChart} className="mt-3 h-[250px] min-w-0 w-full overflow-visible"><BarChart data={adherenceData} margin={{ left: 8, right: 14, top: 12, bottom: 12 }}><CartesianGrid vertical={false} strokeDasharray="3 5" /><XAxis dataKey="month" tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={18} tick={{ fontSize: 11 }} tickMargin={8} /><YAxis width={30} tickLine={false} axisLine={false} tickMargin={5} tick={{ fontSize: 10 }} allowDecimals={false} /><ChartTooltip content={<ChartTooltipContent />} /><Bar dataKey="completed" fill="var(--color-completed)" radius={[6, 6, 0, 0]} /><Bar dataKey="missed" fill="var(--color-missed)" radius={[6, 6, 0, 0]} /></BarChart></ChartContainer><div className="mt-1 flex justify-center gap-5 px-3"><MetricLegend color="var(--color-completed)" label="Completados" /><MetricLegend color="var(--color-missed)" label="Incumplidos" /></div></CardContent></Card>
           </TabsContent>
         </Tabs>
       </div>
 
-      <Dialog open={metricDialogOpen} onOpenChange={setMetricDialogOpen}><DialogContent><DialogHeader><DialogTitle>Nueva medición</DialogTitle><DialogDescription>Registra los tres datos juntos para comparar su evolución.</DialogDescription></DialogHeader><div className="space-y-3"><div><Label htmlFor="metric-date">Fecha</Label><Input id="metric-date" type="date" className="mt-1 h-10" value={metricDate} onChange={(event) => setMetricDate(event.target.value)} /></div><div><Label htmlFor="metric-weight">Peso (kg)</Label><DecimalWeightInput id="metric-weight" className="mt-1 h-10" value={metricWeight} onValueChange={setMetricWeight} placeholder="0,00" /></div><div className="grid grid-cols-2 gap-3"><div><Label htmlFor="metric-fat">Grasa (%)</Label><Input id="metric-fat" type="number" inputMode="decimal" className="mt-1 h-10" value={metricFat} onChange={(event) => setMetricFat(event.target.value)} /></div><div><Label htmlFor="metric-muscle">Musculatura (%)</Label><Input id="metric-muscle" type="number" inputMode="decimal" className="mt-1 h-10" value={metricMuscle} onChange={(event) => setMetricMuscle(event.target.value)} /></div></div></div><DialogFooter><Button variant="outline" onClick={() => setMetricDialogOpen(false)}>Cancelar</Button><Button onClick={saveMetric}>Guardar</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={metricDialogOpen} onOpenChange={setMetricDialogOpen}><DialogContent><DialogHeader><DialogTitle>Nueva medición</DialogTitle><DialogDescription>Introduce peso y porcentajes; el progreso mostrará las masas estimadas en kg.</DialogDescription></DialogHeader><div className="space-y-3"><div><Label htmlFor="metric-date">Fecha</Label><Input id="metric-date" type="date" className="mt-1 h-10" value={metricDate} onChange={(event) => setMetricDate(event.target.value)} /></div><div><Label htmlFor="metric-weight">Peso (kg)</Label><DecimalWeightInput id="metric-weight" className="mt-1 h-10" value={metricWeight} onValueChange={setMetricWeight} placeholder="0,00" /></div><div className="grid grid-cols-2 gap-3"><div><Label htmlFor="metric-fat">Grasa (%)</Label><Input id="metric-fat" type="number" inputMode="decimal" className="mt-1 h-10" value={metricFat} onChange={(event) => setMetricFat(event.target.value)} /></div><div><Label htmlFor="metric-muscle">Musculatura (%)</Label><Input id="metric-muscle" type="number" inputMode="decimal" className="mt-1 h-10" value={metricMuscle} onChange={(event) => setMetricMuscle(event.target.value)} /></div></div></div><DialogFooter><Button variant="outline" onClick={() => setMetricDialogOpen(false)}>Cancelar</Button><Button onClick={saveMetric}>Guardar</Button></DialogFooter></DialogContent></Dialog>
 
       <Dialog open={photoDialogOpen} onOpenChange={setPhotoDialogOpen}><DialogContent><DialogHeader><DialogTitle>Nueva fotografía</DialogTitle><DialogDescription>La imagen se comprimirá y quedará guardada únicamente en este dispositivo.</DialogDescription></DialogHeader><div className="space-y-3"><div><Label htmlFor="photo-file">Fotografía</Label><Input id="photo-file" type="file" accept="image/*" capture="environment" className="mt-1 h-11" onChange={(event) => readPhoto(event.target.files?.[0])} /></div>{photoData ? <img src={photoData} alt="Vista previa" className="mx-auto max-h-56 rounded-2xl object-contain" /> : null}<div className="grid grid-cols-2 gap-3"><div><Label htmlFor="photo-date">Fecha</Label><Input id="photo-date" type="date" className="mt-1 h-10" value={photoDate} onChange={(event) => setPhotoDate(event.target.value)} /></div><div><Label>Postura</Label><Select value={photoPose} onValueChange={(value) => setPhotoPose(value as PhotoPose)}><SelectTrigger className="mt-1 h-10 w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="frontal">Frontal</SelectItem><SelectItem value="lateral">Lateral</SelectItem><SelectItem value="espalda">Espalda</SelectItem></SelectContent></Select></div></div></div><DialogFooter><Button variant="outline" onClick={() => setPhotoDialogOpen(false)}>Cancelar</Button><Button onClick={savePhoto} disabled={!photoData || photoBusy}>{photoBusy ? 'Comprimiendo…' : 'Guardar foto'}</Button></DialogFooter></DialogContent></Dialog>
     </div>
   );
 }
 
-function Stat({ icon: Icon, label, value, delta }: { icon: typeof Dumbbell; label: string; value: string; delta?: number }) {
-  return <Card className="rounded-[18px] bg-white py-3 ring-black/6 dark:bg-[#1c1c1c] dark:ring-white/10"><CardContent className="px-3"><Icon className="mb-3 size-4 text-black/35 dark:text-white/35" /><p className="truncate text-lg font-black tracking-tight">{value}</p><div className="mt-1 flex items-center gap-1"><p className="truncate text-[10px] font-semibold text-black/40 dark:text-white/40">{label}</p>{delta !== undefined && delta !== 0 ? <span className={`text-[9px] font-bold ${delta > 0 ? 'text-emerald-600' : 'text-red-600'}`}>{delta > 0 ? '+' : '−'}{Math.abs(delta).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span> : null}</div></CardContent></Card>;
+function Stat({ icon: Icon, label, value, delta, deltaUnit }: { icon: typeof Dumbbell; label: string; value: string; delta?: number; deltaUnit?: string }) {
+  return <Card className="rounded-[18px] bg-white py-3 ring-black/6 dark:bg-[#1c1c1c] dark:ring-white/10"><CardContent className="px-3"><Icon className="mb-3 size-4 text-black/35 dark:text-white/35" /><p className="truncate text-lg font-black tracking-tight">{value}</p><div className="mt-1 flex min-w-0 items-center gap-1"><p className="truncate text-[10px] font-semibold text-black/40 dark:text-white/40">{label}</p>{delta !== undefined && delta !== 0 ? <span className={`shrink-0 text-[9px] font-bold ${delta > 0 ? 'text-emerald-600' : 'text-red-600'}`}>{delta > 0 ? '+' : '−'}{Math.abs(delta).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{deltaUnit ? ` ${deltaUnit}` : ''}</span> : null}</div></CardContent></Card>;
+}
+
+function MetricLegend({ color, label, dashed, dotted }: { color: string; label: string; dashed?: boolean; dotted?: boolean }) {
+  return <div className="flex items-center gap-2">
+    <span aria-hidden="true" className={`h-0.5 w-4 shrink-0 ${dashed ? 'border-t-2 border-dashed' : dotted ? 'border-t-2 border-dotted' : ''}`} style={dashed || dotted ? { borderColor: color } : { backgroundColor: color }} />
+    <span className="text-xs text-black/65 dark:text-white/65">{label}</span>
+  </div>;
 }
 
 function PhotoFrame({ photo }: { photo?: ProgressPhoto }) {

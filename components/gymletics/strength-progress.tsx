@@ -20,7 +20,7 @@ import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -257,7 +257,27 @@ function DayComparison({
       {!sessions.length ? <EmptyState icon={ChartNoAxesColumnIncreasing} title="No hay sesiones en este periodo" description="Completa este día o amplía el rango para comparar todos sus ejercicios." /> : (
         <>
           <Card className="rounded-[24px] bg-white py-4 ring-black/6 dark:bg-[#1c1c1c] dark:ring-white/10">
-            <CardContent className="px-2"><div className="px-3"><p className="text-sm font-extrabold">Gráfica de todos los ejercicios</p><p className="mt-0.5 text-xs text-black/45 dark:text-white/45">Cada línea representa la evolución del 1RM estimado.</p></div><ChartContainer config={dayChartConfig} className="mt-2 h-[280px] w-full"><LineChart data={dayChartData} margin={{ left: 0, right: 12, top: 12, bottom: 4 }}><CartesianGrid vertical={false} strokeDasharray="3 5" /><XAxis dataKey="label" tickLine={false} axisLine={false} /><YAxis hide domain={['auto', 'auto']} /><ChartTooltip content={<ChartTooltipContent valueFormatter={(value, name) => { const row = chartRows.find((item) => item.key === String(name)); return typeof value === 'number' ? `${formatWeight(value)} ${row?.unit ?? ''}` : String(value); }} />} /><ChartLegend content={<ChartLegendContent className="flex-wrap gap-x-3 gap-y-1 text-[10px]" />} />{chartRows.map((row) => <Line key={row.key} dataKey={row.key} type="monotone" stroke={`var(--color-${row.key})`} strokeWidth={2.5} dot={{ r: 2.5 }} connectNulls />)}</LineChart></ChartContainer></CardContent>
+            <CardContent className="min-w-0 px-2">
+              <div className="px-3">
+                <p className="text-sm font-extrabold">Gráfica de todos los ejercicios</p>
+                <p className="mt-0.5 text-xs text-black/45 dark:text-white/45">Cada línea representa la evolución del 1RM estimado.</p>
+              </div>
+              <ChartContainer config={dayChartConfig} className="mt-2 h-[260px] min-w-0 w-full overflow-visible">
+                <LineChart data={dayChartData} margin={{ left: 8, right: 16, top: 16, bottom: 12 }}>
+                  <CartesianGrid vertical={false} strokeDasharray="3 5" />
+                  <XAxis dataKey="label" tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={24} tick={{ fontSize: 11 }} tickMargin={8} />
+                  <YAxis width={50} tickLine={false} axisLine={false} tickMargin={6} tick={{ fontSize: 10 }} tickFormatter={(value: number) => formatWeight(value)} domain={['auto', 'auto']} />
+                  <ChartTooltip content={<ChartTooltipContent valueFormatter={(value, name) => { const row = chartRows.find((item) => item.key === String(name)); return typeof value === 'number' ? `${formatWeight(value)} ${row?.unit ?? ''}` : String(value); }} />} />
+                  {chartRows.map((row) => <Line key={row.key} dataKey={row.key} type="monotone" stroke={`var(--color-${row.key})`} strokeWidth={2.5} dot={{ r: 2.5 }} connectNulls />)}
+                </LineChart>
+              </ChartContainer>
+              <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-2 px-3 sm:grid-cols-3">
+                {chartRows.map((row) => <div key={row.key} title={row.label} className="flex min-w-0 items-center gap-2">
+                  <span aria-hidden="true" className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: `var(--color-${row.key})` }} />
+                  <span className="truncate text-xs font-medium text-black/65 dark:text-white/65">{row.label}</span>
+                </div>)}
+              </div>
+            </CardContent>
           </Card>
 
           <Card className="overflow-hidden rounded-[24px] bg-white py-0 ring-black/6 dark:bg-[#1c1c1c] dark:ring-white/10">
@@ -329,7 +349,31 @@ function ExerciseDetail({
             <Metric icon={History} label="Frecuencia" value={`${weeklyExerciseFrequency(allHistory).toLocaleString('es-ES', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}/sem`} />
           </section>
 
-          {visibleHistory.length ? <Card className="rounded-[24px] bg-white py-4 ring-black/6 dark:bg-[#1c1c1c] dark:ring-white/10"><CardContent className="px-2"><div className="px-3"><p className="text-sm font-extrabold">Peso y repeticiones</p><p className="mt-0.5 text-xs text-black/45 dark:text-white/45">Evolución dentro del periodo seleccionado</p></div><ChartContainer config={performanceChart} className="mt-2 h-[240px] w-full"><LineChart data={visibleHistory.map((point) => ({ ...point, label: format(new Date(`${point.date}T12:00:00`), 'dd/MM') }))} margin={{ left: 0, right: 12, top: 12, bottom: 0 }}><CartesianGrid vertical={false} strokeDasharray="3 5" /><XAxis dataKey="label" tickLine={false} axisLine={false} /><YAxis yAxisId="weight" hide domain={['dataMin - 2', 'dataMax + 2']} /><YAxis yAxisId="reps" hide orientation="right" domain={[0, 'dataMax + 2']} /><ChartTooltip content={<ChartTooltipContent valueFormatter={(value, name) => typeof value === 'number' ? name === 'weight' ? `${formatWeight(value)} ${definition.unit}` : `${value} reps` : String(value)} />} /><Line yAxisId="weight" dataKey="weight" type="monotone" stroke="var(--color-weight)" strokeWidth={3} dot={{ r: 3 }} /><Line yAxisId="reps" dataKey="reps" type="monotone" stroke="var(--color-reps)" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 2 }} /></LineChart></ChartContainer></CardContent></Card> : <EmptyState icon={ChartNoAxesColumnIncreasing} title="Sin datos en este periodo" description="Amplía el rango para ver la evolución de este ejercicio." />}
+          {visibleHistory.length ? (
+            <Card className="rounded-[24px] bg-white py-4 ring-black/6 dark:bg-[#1c1c1c] dark:ring-white/10">
+              <CardContent className="min-w-0 px-2">
+                <div className="px-3">
+                  <p className="text-sm font-extrabold">Peso y repeticiones</p>
+                  <p className="mt-0.5 text-xs text-black/45 dark:text-white/45">Evolución dentro del periodo seleccionado</p>
+                </div>
+                <ChartContainer config={performanceChart} className="mt-2 h-[250px] min-w-0 w-full overflow-visible">
+                  <LineChart data={visibleHistory.map((point) => ({ ...point, label: format(new Date(`${point.date}T12:00:00`), 'dd/MM') }))} margin={{ left: 8, right: 16, top: 16, bottom: 12 }}>
+                    <CartesianGrid vertical={false} strokeDasharray="3 5" />
+                    <XAxis dataKey="label" tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={24} tick={{ fontSize: 11 }} tickMargin={8} />
+                    <YAxis yAxisId="weight" width={50} tickLine={false} axisLine={false} tickMargin={6} tick={{ fontSize: 10 }} tickFormatter={(value: number) => formatWeight(value)} domain={['dataMin - 2', 'dataMax + 2']} />
+                    <YAxis yAxisId="reps" orientation="right" width={34} tickLine={false} axisLine={false} tickMargin={6} tick={{ fontSize: 10 }} allowDecimals={false} domain={[0, 'dataMax + 2']} />
+                    <ChartTooltip content={<ChartTooltipContent valueFormatter={(value, name) => typeof value === 'number' ? name === 'weight' ? `${formatWeight(value)} ${definition.unit}` : `${value} reps` : String(value)} />} />
+                    <Line yAxisId="weight" dataKey="weight" type="monotone" stroke="var(--color-weight)" strokeWidth={3} dot={{ r: 3 }} />
+                    <Line yAxisId="reps" dataKey="reps" type="monotone" stroke="var(--color-reps)" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 2 }} />
+                  </LineChart>
+                </ChartContainer>
+                <div className="mt-1 flex flex-wrap justify-center gap-x-5 gap-y-2 px-3">
+                  <div className="flex items-center gap-2"><span aria-hidden="true" className="h-0.5 w-4 bg-black dark:bg-white" /><span className="text-xs text-black/65 dark:text-white/65">Peso ({definition.unit})</span></div>
+                  <div className="flex items-center gap-2"><span aria-hidden="true" className="w-4 border-t-2 border-dashed border-[#8a8a8a]" /><span className="text-xs text-black/65 dark:text-white/65">Repeticiones</span></div>
+                </div>
+              </CardContent>
+            </Card>
+          ) : <EmptyState icon={ChartNoAxesColumnIncreasing} title="Sin datos en este periodo" description="Amplía el rango para ver la evolución de este ejercicio." />}
 
           <PeriodComparison current={visibleHistory} previous={previousHistory} unit={definition.unit} />
 
