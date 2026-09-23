@@ -110,8 +110,10 @@ export interface BodyMetric {
   id: string;
   date: string;
   weight: number;
-  fatPercent: number;
-  musclePercent: number;
+  fatPercent?: number;
+  musclePercent?: number;
+  fatKg?: number;
+  muscleKg?: number;
 }
 
 export interface ProgressPhoto {

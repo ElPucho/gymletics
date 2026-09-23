@@ -38,6 +38,7 @@ import { EmptyState, ScreenHeader } from './shared';
 import { StrengthProgress } from './strength-progress';
 import { uid } from '@/lib/gymletics/defaults';
 import { formatWeight } from '@/lib/gymletics/weight-format';
+import { bodyFatKg, bodyMuscleKg } from '@/lib/gymletics/body-metrics';
 import type { GymleticsData, PhotoPose, ProgressPhoto } from '@/lib/gymletics/types';
 const bodyChart = {
   weight: { label: 'Peso corporal', theme: { light: '#111111', dark: '#f5f5f5' } },
@@ -49,8 +50,8 @@ const adherenceChart = {
   missed: { label: 'Incumplidos', theme: { light: '#c8c8c8', dark: '#575757' } },
 } satisfies ChartConfig;
 
-function massFromPercentage(weight: number, percentage: number) {
-  return weight * percentage / 100;
+function massFromPercentage(weight: number, percentage?: number) {
+  return weight * (percentage ?? 0) / 100;
 }
 
 async function compressImage(file: File): Promise<string> {
@@ -85,8 +86,9 @@ export function ProgressScreen({
   const [metricDialogOpen, setMetricDialogOpen] = useState(false);
   const [metricDate, setMetricDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [metricWeight, setMetricWeight] = useState<number | null>(null);
-  const [metricFat, setMetricFat] = useState('');
-  const [metricMuscle, setMetricMuscle] = useState('');
+  const [metricUnit, setMetricUnit] = useState<'kg' | 'percent'>('kg');
+  const [metricFat, setMetricFat] = useState<number | null>(null);
+  const [metricMuscle, setMetricMuscle] = useState<number | null>(null);
   const [photoDialogOpen, setPhotoDialogOpen] = useState(false);
   const [photoDate, setPhotoDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [photoPose, setPhotoPose] = useState<PhotoPose>('frontal');
@@ -100,11 +102,19 @@ export function ProgressScreen({
     .map((metric) => ({
       label: format(new Date(`${metric.date}T12:00:00`), 'dd/MM'),
       weight: metric.weight,
-      fatMass: massFromPercentage(metric.weight, metric.fatPercent),
-      muscleMass: massFromPercentage(metric.weight, metric.musclePercent),
+      fatMass: bodyFatKg(metric),
+      muscleMass: bodyMuscleKg(metric),
     }));
   const latestBody = [...data.bodyMetrics].sort((a, b) => b.date.localeCompare(a.date))[0];
   const bodyPrevious = [...data.bodyMetrics].sort((a, b) => b.date.localeCompare(a.date))[1];
+  const latestFatKg = latestBody ? bodyFatKg(latestBody) : null;
+  const previousFatKg = bodyPrevious ? bodyFatKg(bodyPrevious) : null;
+  const latestMuscleKg = latestBody ? bodyMuscleKg(latestBody) : null;
+  const previousMuscleKg = bodyPrevious ? bodyMuscleKg(bodyPrevious) : null;
+  const maxCompositionValue = metricUnit === 'percent' ? 100 : metricWeight ?? 0;
+  const compositionValues = [metricFat, metricMuscle];
+  const compositionWithinRange = compositionValues.every((value) => value !== null && value >= 0 && value <= maxCompositionValue);
+  const canSaveMetric = Boolean(metricDate && metricWeight !== null && metricWeight > 0 && compositionWithinRange);
   const photos = [...data.photos].sort((a, b) => a.date.localeCompare(b.date));
   const firstPhoto = photos.find((photo) => photo.id === compareA) ?? photos[0];
   const secondPhoto = photos.find((photo) => photo.id === compareB) ?? photos.at(-1);
@@ -121,15 +131,25 @@ export function ProgressScreen({
   });
 
   function saveMetric() {
-    if (!metricDate || metricWeight === null) return;
+    if (!canSaveMetric || metricFat === null || metricMuscle === null || metricWeight === null) return;
+    const composition = metricUnit === 'kg'
+      ? {
+        fatKg: metricFat,
+        muscleKg: metricMuscle,
+        fatPercent: metricFat / metricWeight * 100,
+        musclePercent: metricMuscle / metricWeight * 100,
+      }
+      : { fatPercent: metricFat, musclePercent: metricMuscle };
     updateData((current) => ({
       ...current,
       bodyMetrics: [
         ...current.bodyMetrics.filter((metric) => metric.date !== metricDate),
-        { id: uid('metric'), date: metricDate, weight: metricWeight, fatPercent: Number(metricFat || 0), musclePercent: Number(metricMuscle || 0) },
+        { id: uid('metric'), date: metricDate, weight: metricWeight, ...composition },
       ],
     }));
     setMetricWeight(null);
+    setMetricFat(null);
+    setMetricMuscle(null);
     setMetricDialogOpen(false);
   }
 
@@ -169,13 +189,13 @@ export function ProgressScreen({
               <>
                 <section className="grid grid-cols-3 gap-2">
                   <Stat icon={Scale} label="Peso" value={`${formatWeight(latestBody.weight)} kg`} delta={bodyPrevious ? latestBody.weight - bodyPrevious.weight : undefined} deltaUnit="kg" />
-                  <Stat icon={Target} label="Masa grasa" value={`${formatWeight(massFromPercentage(latestBody.weight, latestBody.fatPercent))} kg`} delta={bodyPrevious ? massFromPercentage(latestBody.weight, latestBody.fatPercent) - massFromPercentage(bodyPrevious.weight, bodyPrevious.fatPercent) : undefined} deltaUnit="kg" />
-                  <Stat icon={Dumbbell} label="Masa muscular" value={`${formatWeight(massFromPercentage(latestBody.weight, latestBody.musclePercent))} kg`} delta={bodyPrevious ? massFromPercentage(latestBody.weight, latestBody.musclePercent) - massFromPercentage(bodyPrevious.weight, bodyPrevious.musclePercent) : undefined} deltaUnit="kg" />
+                  <Stat icon={Target} label="Masa grasa" value={`${formatWeight(latestFatKg ?? 0)} kg`} delta={bodyPrevious && latestFatKg !== null && previousFatKg !== null ? latestFatKg - previousFatKg : undefined} deltaUnit="kg" />
+                  <Stat icon={Dumbbell} label="Masa muscular" value={`${formatWeight(latestMuscleKg ?? 0)} kg`} delta={bodyPrevious && latestMuscleKg !== null && previousMuscleKg !== null ? latestMuscleKg - previousMuscleKg : undefined} deltaUnit="kg" />
                 </section>
                 <Card className="rounded-[24px] bg-white py-4 ring-black/6 dark:bg-[#1c1c1c] dark:ring-white/10">
                   <CardContent className="min-w-0 px-2">
                     <p className="px-3 text-sm font-extrabold">Composición corporal · kg</p>
-                    <p className="mt-0.5 px-3 text-xs text-black/45 dark:text-white/45">Grasa y musculatura calculadas con el peso y los porcentajes registrados.</p>
+                    <p className="mt-0.5 px-3 text-xs text-black/45 dark:text-white/45">Puedes registrar la composición directamente en kg o introducir porcentajes.</p>
                     <ChartContainer config={bodyChart} className="mt-2 h-[270px] min-w-0 w-full overflow-visible">
                       <LineChart data={bodyData} margin={{ left: 4, right: 16, top: 16, bottom: 12 }}>
                         <CartesianGrid vertical={false} strokeDasharray="3 5" />
@@ -196,7 +216,7 @@ export function ProgressScreen({
                 </Card>
                 <div className="space-y-2">{[...data.bodyMetrics].sort((a, b) => b.date.localeCompare(a.date)).map((metric) => <Card key={metric.id} className="rounded-[18px] bg-white py-3 ring-black/6 dark:bg-[#1c1c1c] dark:ring-white/10"><CardContent className="flex items-center gap-3 px-3"><div className="grid size-10 place-items-center rounded-full bg-black text-xs font-black text-white dark:bg-white dark:text-black">{format(new Date(`${metric.date}T12:00:00`), 'dd')}</div><div className="min-w-0 flex-1"><p className="text-sm font-extrabold">{formatWeight(metric.weight)} kg</p><p className="text-xs text-black/45 dark:text-white/45">Grasa {formatWeight(massFromPercentage(metric.weight, metric.fatPercent))} kg · Músculo {formatWeight(massFromPercentage(metric.weight, metric.musclePercent))} kg</p></div><Button aria-label="Eliminar medición" variant="ghost" size="icon-sm" className="text-red-600" onClick={() => updateData((current) => ({ ...current, bodyMetrics: current.bodyMetrics.filter((item) => item.id !== metric.id) }))}><Trash2 /></Button></CardContent></Card>)}</div>
               </>
-            ) : <EmptyState icon={Scale} title="Registra tu punto de partida" description="Añade tu peso y los porcentajes de grasa y musculatura. La app mostrará sus masas estimadas en kg." action={<Button onClick={() => setMetricDialogOpen(true)}>Añadir medición</Button>} />}
+            ) : <EmptyState icon={Scale} title="Registra tu punto de partida" description="Añade tu peso y registra grasa y musculatura en kg o en porcentaje." action={<Button onClick={() => setMetricDialogOpen(true)}>Añadir medición</Button>} />}
           </TabsContent>
 
           <TabsContent value="photos" className="mt-5 space-y-4">
@@ -217,7 +237,34 @@ export function ProgressScreen({
         </Tabs>
       </div>
 
-      <Dialog open={metricDialogOpen} onOpenChange={setMetricDialogOpen}><DialogContent><DialogHeader><DialogTitle>Nueva medición</DialogTitle><DialogDescription>Introduce peso y porcentajes; el progreso mostrará las masas estimadas en kg.</DialogDescription></DialogHeader><div className="space-y-3"><div><Label htmlFor="metric-date">Fecha</Label><Input id="metric-date" type="date" className="mt-1 h-10" value={metricDate} onChange={(event) => setMetricDate(event.target.value)} /></div><div><Label htmlFor="metric-weight">Peso (kg)</Label><DecimalWeightInput id="metric-weight" className="mt-1 h-10" value={metricWeight} onValueChange={setMetricWeight} placeholder="0,00" /></div><div className="grid grid-cols-2 gap-3"><div><Label htmlFor="metric-fat">Grasa (%)</Label><Input id="metric-fat" type="number" inputMode="decimal" className="mt-1 h-10" value={metricFat} onChange={(event) => setMetricFat(event.target.value)} /></div><div><Label htmlFor="metric-muscle">Musculatura (%)</Label><Input id="metric-muscle" type="number" inputMode="decimal" className="mt-1 h-10" value={metricMuscle} onChange={(event) => setMetricMuscle(event.target.value)} /></div></div></div><DialogFooter><Button variant="outline" onClick={() => setMetricDialogOpen(false)}>Cancelar</Button><Button onClick={saveMetric}>Guardar</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={metricDialogOpen} onOpenChange={setMetricDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Nueva medición</DialogTitle>
+            <DialogDescription>Introduce tu peso y elige cómo registrar la grasa y la musculatura.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div><Label htmlFor="metric-date">Fecha</Label><Input id="metric-date" type="date" required className="mt-1 h-10" value={metricDate} onChange={(event) => setMetricDate(event.target.value)} /></div>
+            <div><Label htmlFor="metric-weight">Peso corporal (kg)</Label><DecimalWeightInput id="metric-weight" required className="mt-1 h-10" value={metricWeight} onValueChange={setMetricWeight} placeholder="0,00" /></div>
+            <div>
+              <Label>Unidad de composición corporal</Label>
+              <div className="mt-1 grid grid-cols-2 gap-2" role="group" aria-label="Unidad de composición corporal">
+                <Button type="button" variant={metricUnit === 'kg' ? 'default' : 'outline'} aria-pressed={metricUnit === 'kg'} className="h-10 rounded-xl" onClick={() => { setMetricUnit('kg'); setMetricFat(null); setMetricMuscle(null); }}>Kilogramos (kg)</Button>
+                <Button type="button" variant={metricUnit === 'percent' ? 'default' : 'outline'} aria-pressed={metricUnit === 'percent'} className="h-10 rounded-xl" onClick={() => { setMetricUnit('percent'); setMetricFat(null); setMetricMuscle(null); }}>Porcentaje (%)</Button>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label htmlFor="metric-fat">{metricUnit === 'kg' ? 'Masa grasa (kg)' : 'Grasa (%)'}</Label><DecimalWeightInput id="metric-fat" required className="mt-1 h-10" value={metricFat} onValueChange={setMetricFat} placeholder="0,00" /></div>
+              <div><Label htmlFor="metric-muscle">{metricUnit === 'kg' ? 'Masa muscular (kg)' : 'Musculatura (%)'}</Label><DecimalWeightInput id="metric-muscle" required className="mt-1 h-10" value={metricMuscle} onValueChange={setMetricMuscle} placeholder="0,00" /></div>
+            </div>
+            {!compositionWithinRange && metricFat !== null && metricMuscle !== null ? <p className="text-xs text-red-600" role="status">{metricUnit === 'percent' ? 'Los porcentajes deben estar entre 0 y 100.' : 'Las masas en kg no pueden superar tu peso corporal.'}</p> : null}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMetricDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={saveMetric} disabled={!canSaveMetric}>Guardar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={photoDialogOpen} onOpenChange={setPhotoDialogOpen}><DialogContent><DialogHeader><DialogTitle>Nueva fotografía</DialogTitle><DialogDescription>La imagen se comprimirá y quedará guardada únicamente en este dispositivo.</DialogDescription></DialogHeader><div className="space-y-3"><div><Label htmlFor="photo-file">Fotografía</Label><Input id="photo-file" type="file" accept="image/*" capture="environment" className="mt-1 h-11" onChange={(event) => readPhoto(event.target.files?.[0])} /></div>{photoData ? <img src={photoData} alt="Vista previa" className="mx-auto max-h-56 rounded-2xl object-contain" /> : null}<div className="grid grid-cols-2 gap-3"><div><Label htmlFor="photo-date">Fecha</Label><Input id="photo-date" type="date" className="mt-1 h-10" value={photoDate} onChange={(event) => setPhotoDate(event.target.value)} /></div><div><Label>Postura</Label><Select value={photoPose} onValueChange={(value) => setPhotoPose(value as PhotoPose)}><SelectTrigger className="mt-1 h-10 w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="frontal">Frontal</SelectItem><SelectItem value="lateral">Lateral</SelectItem><SelectItem value="espalda">Espalda</SelectItem></SelectContent></Select></div></div></div><DialogFooter><Button variant="outline" onClick={() => setPhotoDialogOpen(false)}>Cancelar</Button><Button onClick={savePhoto} disabled={!photoData || photoBusy}>{photoBusy ? 'Comprimiendo…' : 'Guardar foto'}</Button></DialogFooter></DialogContent></Dialog>
     </div>

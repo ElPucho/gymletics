@@ -154,11 +154,51 @@ export function WorkoutScreen({
   const [finishMode, setFinishMode] = useState(false);
   const [lastSetAction, setLastSetAction] = useState<{ setId: string; completed: boolean } | null>(null);
   const wakeLock = useRef<{ release: () => Promise<void> } | null>(null);
+  const timerAudioContext = useRef<AudioContext | null>(null);
+  const timerCompletionPending = useRef(false);
   const timerElement = useRef<HTMLOutputElement | null>(null);
   const timerDrag = useRef<{ pointerId: number; offsetX: number; offsetY: number } | null>(null);
   const viewportBaseline = useRef<{ width: number; height: number } | null>(null);
   const [timerPosition, setTimerPosition] = useState<{ x: number; y: number } | null>(null);
   const [visibleViewport, setVisibleViewport] = useState<VisibleViewport | null>(null);
+
+  function prepareTimerSound() {
+    if (typeof window === 'undefined' || typeof window.AudioContext === 'undefined') return;
+    const context = timerAudioContext.current ?? new window.AudioContext();
+    timerAudioContext.current = context;
+    if (context.state === 'suspended') void context.resume().catch(() => undefined);
+  }
+
+  function playTimerSound() {
+    const context = timerAudioContext.current;
+    if (!context) return;
+    void context.resume().then(() => {
+      if (context.state !== 'running') return;
+      const now = context.currentTime;
+      [{ delay: 0, frequency: 880 }, { delay: 0.22, frequency: 660 }].forEach(({ delay, frequency }) => {
+        const start = now + delay;
+        const oscillator = context.createOscillator();
+        const volume = context.createGain();
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(frequency, start);
+        volume.gain.setValueAtTime(0.0001, start);
+        volume.gain.exponentialRampToValueAtTime(0.16, start + 0.025);
+        volume.gain.exponentialRampToValueAtTime(0.0001, start + 0.34);
+        oscillator.connect(volume);
+        volume.connect(context.destination);
+        oscillator.start(start);
+        oscillator.stop(start + 0.35);
+      });
+    }).catch(() => undefined);
+  }
+
+  function startRestTimer(seconds: number, mode: 'normal' | 'rest-pause') {
+    prepareTimerSound();
+    timerCompletionPending.current = false;
+    setTimerMode(mode);
+    setTimer(seconds);
+    setTimerRunning(seconds > 0);
+  }
 
   const exerciseLibrary = useMemo(() => {
     const unique = new Map<string, RoutineDay['exercises'][number]>();
@@ -211,13 +251,19 @@ export function WorkoutScreen({
     setFinishMode(false);
   }, [data, day, plan, updateData]);
 
+  useEffect(() => () => {
+    const context = timerAudioContext.current;
+    timerAudioContext.current = null;
+    if (context && context.state !== 'closed') void context.close().catch(() => undefined);
+  }, []);
+
   useEffect(() => {
     if (!timerRunning || timer <= 0) return;
     const interval = window.setInterval(() => {
       setTimer((current) => {
         if (current <= 1) {
           setTimerRunning(false);
-          if (data.settings.vibration && 'vibrate' in navigator) navigator.vibrate([150, 80, 150]);
+          timerCompletionPending.current = true;
           return 0;
         }
         return current - 1;
@@ -225,6 +271,13 @@ export function WorkoutScreen({
     }, 1000);
     return () => window.clearInterval(interval);
   }, [data.settings.vibration, timer, timerRunning]);
+
+  useEffect(() => {
+    if (timer !== 0 || !timerCompletionPending.current) return;
+    timerCompletionPending.current = false;
+    if (data.settings.vibration && 'vibrate' in navigator) navigator.vibrate([150, 80, 150]);
+    playTimerSound();
+  }, [data.settings.vibration, timer]);
 
   useEffect(() => {
     const visualViewport = window.visualViewport;
@@ -340,9 +393,7 @@ export function WorkoutScreen({
       const startsRestPause = finishesWorkSets
         && (selectedPlanExercise?.technique ?? selectedLog?.technique) === 'rest-pause';
       const restSeconds = startsRestPause ? 10 : selectedPlanExercise?.restSeconds ?? 60;
-      setTimerMode(startsRestPause ? 'rest-pause' : 'normal');
-      setTimer(restSeconds);
-      setTimerRunning(restSeconds > 0);
+      startRestTimer(restSeconds, startsRestPause ? 'rest-pause' : 'normal');
     }
   }
 
@@ -357,6 +408,7 @@ export function WorkoutScreen({
     }));
     setTimer(0);
     setTimerRunning(false);
+    timerCompletionPending.current = false;
     setLastSetAction(null);
   }
 
@@ -428,6 +480,7 @@ export function WorkoutScreen({
     }));
     setTimer(0);
     setTimerRunning(false);
+    timerCompletionPending.current = false;
     setLastSetAction(null);
   }
 
@@ -450,9 +503,7 @@ export function WorkoutScreen({
       }),
     }));
     if (startsSecondBlock) {
-      setTimerMode('rest-pause');
-      setTimer(10);
-      setTimerRunning(true);
+      startRestTimer(10, 'rest-pause');
     }
   }
 
@@ -767,10 +818,10 @@ export function WorkoutScreen({
           <div className={`flex items-center ${keyboardTimerVisible ? 'gap-2' : 'gap-3'}`}>
             <div className={`grid shrink-0 place-items-center rounded-full bg-white font-black text-black tabular-nums ${keyboardTimerVisible ? 'size-11 text-base' : 'size-14 text-xl'}`}>{Math.floor(timer / 60)}:{String(timer % 60).padStart(2, '0')}</div>
             <div className="min-w-0 flex-1"><p className="truncate text-sm font-extrabold">{timerMode === 'rest-pause' ? 'Descanso rest-pause' : 'Descanso'}</p>{!keyboardTimerVisible ? <p className="truncate text-xs text-white/45">{timerMode === 'rest-pause' ? '10 segundos antes del siguiente bloque' : 'Respira y prepara la siguiente serie'}</p> : null}</div>
-            <Button aria-label={timerRunning ? 'Pausar temporizador' : 'Continuar temporizador'} variant="outline" size="icon" className="rounded-full border-white/15 bg-white/10 text-white hover:bg-white/20" onClick={() => setTimerRunning((current) => !current)}>{timerRunning ? <Pause /> : <Play />}</Button>
-            <Button aria-label="Saltar descanso" variant="outline" size="icon" className="rounded-full border-white/15 bg-white/10 text-white hover:bg-white/20" onClick={() => { setTimer(0); setTimerRunning(false); }}><SkipForward /></Button>
+            <Button aria-label={timerRunning ? 'Pausar temporizador' : 'Continuar temporizador'} variant="outline" size="icon" className="rounded-full border-white/15 bg-white/10 text-white hover:bg-white/20" onClick={() => { if (!timerRunning) prepareTimerSound(); setTimerRunning((current) => !current); }}>{timerRunning ? <Pause /> : <Play />}</Button>
+            <Button aria-label="Saltar descanso" variant="outline" size="icon" className="rounded-full border-white/15 bg-white/10 text-white hover:bg-white/20" onClick={() => { timerCompletionPending.current = false; setTimer(0); setTimerRunning(false); }}><SkipForward /></Button>
           </div>
-          {!keyboardTimerVisible ? <div className="mt-3 grid grid-cols-2 divide-x divide-white/10 text-xs font-bold text-white/55"><button type="button" className="py-1 text-center" onClick={() => { setTimer((current) => current + 30); setTimerRunning(true); }}>+ 30 segundos</button><button type="button" className="flex items-center justify-center gap-1.5 py-1 text-center disabled:opacity-30" disabled={!lastSetAction} onClick={undoLastSet}><RotateCcw className="size-3.5" /> Deshacer serie</button></div> : null}
+          {!keyboardTimerVisible ? <div className="mt-3 grid grid-cols-2 divide-x divide-white/10 text-xs font-bold text-white/55"><button type="button" className="py-1 text-center" onClick={() => { prepareTimerSound(); timerCompletionPending.current = false; setTimer((current) => current + 30); setTimerRunning(true); }}>+ 30 segundos</button><button type="button" className="flex items-center justify-center gap-1.5 py-1 text-center disabled:opacity-30" disabled={!lastSetAction} onClick={undoLastSet}><RotateCcw className="size-3.5" /> Deshacer serie</button></div> : null}
         </output>
       ) : null}
     </>
