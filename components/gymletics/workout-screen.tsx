@@ -182,8 +182,8 @@ export function WorkoutScreen({
         oscillator.type = 'triangle';
         oscillator.frequency.setValueAtTime(frequency, start);
         volume.gain.setValueAtTime(0.0001, start);
-        volume.gain.exponentialRampToValueAtTime(0.9, start + 0.025);
-        volume.gain.setValueAtTime(0.9, start + 0.23);
+        volume.gain.exponentialRampToValueAtTime(1.2, start + 0.025);
+        volume.gain.setValueAtTime(1.2, start + 0.23);
         volume.gain.exponentialRampToValueAtTime(0.0001, start + 0.34);
         oscillator.connect(volume);
         volume.connect(context.destination);
