@@ -24,6 +24,16 @@ import {
 } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -32,6 +42,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DecimalWeightInput } from './decimal-weight-input';
 import { EditableIntegerInput } from './editable-integer-input';
 import { ScreenHeader } from './shared';
+import { SwipeToDeleteRow } from './swipe-to-delete-row';
 import { uid } from '@/lib/gymletics/defaults';
 import { exerciseDefinitionLabel, exerciseIdentityKey, exerciseLogMatchesDefinition, inferExerciseEquipment } from '@/lib/gymletics/exercise-library';
 import { recommendWeight } from '@/lib/gymletics/progression';
@@ -153,6 +164,14 @@ export function WorkoutScreen({
   const [cardioMinutes, setCardioMinutes] = useState(day?.cardioMinutes ?? 0);
   const [finishMode, setFinishMode] = useState(false);
   const [lastSetAction, setLastSetAction] = useState<{ setId: string; completed: boolean } | null>(null);
+  const [swipedSetId, setSwipedSetId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ sessionId: string; exerciseId: string; setId: string } | null>(null);
+  const cancelDeleteButton = useRef<HTMLButtonElement | null>(null);
+  const deleteExercise = deleteTarget
+    ? data.sessions.find((session) => session.id === deleteTarget.sessionId && session.status === 'active')
+      ?.exercises.find((exercise) => exercise.id === deleteTarget.exerciseId)
+    : undefined;
+  const deleteSet = deleteExercise?.sets.find((set) => set.id === deleteTarget?.setId);
   const wakeLock = useRef<{ release: () => Promise<void> } | null>(null);
   const timerAudioContext = useRef<AudioContext | null>(null);
   const timerCompletionPending = useRef(false);
@@ -433,18 +452,25 @@ export function WorkoutScreen({
     }));
   }
 
-  function removeSet(setId: string) {
-    updateSession((session) => ({
-      ...session,
-      exercises: session.exercises.map((exercise, index) => {
-        if (index !== exerciseIndex) return exercise;
-        const target = exercise.sets.find((set) => set.id === setId);
-        const workingSets = exercise.sets.filter((set) => set.type === 'work');
-        if (target?.type === 'work' && workingSets.length <= 1) return exercise;
-        const sets = reindexSets(exercise.sets.filter((set) => set.id !== setId));
-        return { ...exercise, targetSets: sets.filter((set) => set.type === 'work').length, sets };
+  function removeSet() {
+    if (!deleteTarget || !deleteSet) return;
+    const { sessionId, exerciseId, setId } = deleteTarget;
+    updateData((current) => ({
+      ...current,
+      sessions: current.sessions.map((session) => session.id !== sessionId || session.status !== 'active' ? session : {
+        ...session,
+        exercises: session.exercises.map((exercise) => {
+          if (exercise.id !== exerciseId) return exercise;
+          const target = exercise.sets.find((set) => set.id === setId);
+          if (!target || (target.type === 'work' && exercise.sets.filter((set) => set.type === 'work').length <= 1)) return exercise;
+          const sets = reindexSets(exercise.sets.filter((set) => set.id !== setId));
+          return { ...exercise, targetSets: sets.filter((set) => set.type === 'work').length, sets };
+        }),
       }),
     }));
+    if (lastSetAction?.setId === setId) setLastSetAction(null);
+    setSwipedSetId(null);
+    setDeleteTarget(null);
   }
 
   function copyLastSession() {
@@ -759,18 +785,27 @@ export function WorkoutScreen({
           </div>
         </div>
 
-        <div className="mb-2 grid grid-cols-[28px_minmax(0,1fr)_68px_40px_28px] gap-1.5 px-2 text-[10px] font-bold uppercase tracking-wider text-black/35 dark:text-white/35"><span>#</span><span>Peso</span><span>Reps</span><span /><span /></div>
+        <div className="mb-2 grid grid-cols-[28px_minmax(0,1fr)_68px_44px] gap-2 px-2 text-[10px] font-bold uppercase tracking-wider text-black/35 dark:text-white/35"><span>#</span><span>Peso</span><span>Reps</span><span /></div>
         <div className="space-y-2">
           {currentLog.sets.map((set) => (
-            <div key={set.id} className={`grid grid-cols-[28px_minmax(0,1fr)_68px_40px_28px] items-center gap-1.5 rounded-[18px] p-2 transition ${set.completed ? 'bg-black text-white dark:bg-white dark:text-black' : set.type === 'warmup' ? 'bg-[#deded9] dark:bg-white/10' : 'bg-white ring-1 ring-black/6 dark:bg-[#1c1c1c] dark:ring-white/10'}`}>
+            <SwipeToDeleteRow
+              key={set.id}
+              label={set.type === 'warmup' ? `Serie de calentamiento ${set.index + 1}` : `Serie ${set.index + 1}`}
+              canDelete={set.type !== 'work' || currentLog.sets.filter((item) => item.type === 'work').length > 1}
+              open={swipedSetId === set.id}
+              onOpenChange={(open) => setSwipedSetId(open ? set.id : null)}
+              onDelete={() => setDeleteTarget({ sessionId: activeSession.id, exerciseId: currentLog.id, setId: set.id })}
+              className={`grid grid-cols-[28px_minmax(0,1fr)_68px_44px] items-center gap-2 rounded-[18px] p-2 ${set.completed ? 'bg-black text-white dark:bg-white dark:text-black' : set.type === 'warmup' ? 'bg-[#deded9] dark:bg-white/10' : 'bg-white ring-1 ring-inset ring-black/6 dark:bg-[#1c1c1c] dark:ring-white/10'}`}
+            >
               <div className="grid size-7 place-items-center rounded-full text-[11px] font-black">{set.type === 'warmup' ? `C${set.index + 1}` : set.index + 1}</div>
               <div className="relative"><DecimalWeightInput aria-label={`Peso serie ${set.index + 1} en kilogramos`} value={set.weight} onValueChange={(weight) => updateSet(set.id, { weight: weight ?? 0 })} className={`h-11 rounded-xl pr-8 text-center text-base font-black ${set.completed ? 'border-white/15 bg-white/10 text-white dark:border-black/15 dark:bg-black/10 dark:text-black' : 'bg-transparent'}`} /><span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-bold opacity-45">KG</span></div>
               <EditableIntegerInput aria-label={`Repeticiones serie ${set.index + 1}`} value={set.reps} onValueChange={(reps) => updateSet(set.id, { reps: reps ?? 0 })} className={`h-11 rounded-xl text-center text-base font-black ${set.completed ? 'border-white/15 bg-white/10 text-white dark:border-black/15 dark:bg-black/10 dark:text-black' : 'bg-transparent'}`} />
-              <button type="button" aria-label={set.completed ? 'Desmarcar serie' : 'Completar serie'} onClick={() => completeSet(set)} className={`grid size-10 place-items-center rounded-full transition ${set.completed ? 'bg-white text-black dark:bg-black dark:text-white' : 'bg-[#eeeeea] dark:bg-white/10'}`}>{set.completed ? <Check className="size-5" strokeWidth={3} /> : <Circle className="size-5 opacity-30" />}</button>
-              <Button type="button" aria-label="Eliminar serie" variant="ghost" size="icon-sm" className={`size-7 ${set.completed ? 'text-white/55 hover:bg-white/10 hover:text-white dark:text-black/55 dark:hover:bg-black/10 dark:hover:text-black' : 'text-red-600'}`} disabled={set.type === 'work' && currentLog.sets.filter((item) => item.type === 'work').length <= 1} onClick={() => removeSet(set.id)}><Trash2 className="size-3.5" /></Button>
-            </div>
+              <button type="button" aria-label={set.completed ? 'Desmarcar serie' : 'Completar serie'} onClick={() => completeSet(set)} className={`grid size-11 place-items-center rounded-full transition ${set.completed ? 'bg-white text-black dark:bg-black dark:text-white' : 'bg-[#eeeeea] dark:bg-white/10'}`}>{set.completed ? <Check className="size-5" strokeWidth={3} /> : <Circle className="size-5 opacity-30" />}</button>
+            </SwipeToDeleteRow>
           ))}
         </div>
+
+        <p className="mt-2 px-1 text-xs text-black/45 dark:text-white/45">Desliza una serie hacia la izquierda para eliminarla.</p>
 
         <div className="mt-3 grid grid-cols-2 gap-2">
           <Button type="button" variant="outline" className="h-10 rounded-full border-dashed bg-transparent" onClick={addWorkSet}><Plus /> Añadir serie</Button>
@@ -795,11 +830,26 @@ export function WorkoutScreen({
 
       </div>
 
+      <AlertDialog open={Boolean(deleteSet)} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+        <AlertDialogContent size="sm" initialFocus={cancelDeleteButton}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar esta serie?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteSet ? `${deleteSet.type === 'warmup' ? 'Calentamiento' : 'Serie'} ${deleteSet.index + 1} de ${deleteExercise?.exerciseName}: ${formatWeight(deleteSet.weight)} ${deleteExercise?.unit ?? 'kg'} × ${deleteSet.reps} repeticiones. Se quitará de este entrenamiento.` : ''}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel ref={cancelDeleteButton}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={removeSet}>Eliminar serie</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {timer > 0 ? (
         <output
           ref={timerElement}
           aria-live="polite"
-          className={`fixed z-[80] block w-[calc(100%-1.5rem)] max-w-[456px] border border-white/10 bg-black/96 text-white shadow-[0_18px_55px_rgba(0,0,0,0.42)] backdrop-blur-xl ${keyboardTimerVisible ? 'rounded-[18px] p-2' : 'rounded-[24px] p-4 pt-2'} ${timerPosition || keyboardTimerVisible ? '' : 'inset-x-0 top-[calc(4.75rem+var(--gym-safe-top))] mx-auto'}`}
+          className={`fixed ${deleteTarget ? 'z-40' : 'z-[80]'} block w-[calc(100%-1.5rem)] max-w-[456px] border border-white/10 bg-black/96 text-white shadow-[0_18px_55px_rgba(0,0,0,0.42)] backdrop-blur-xl ${keyboardTimerVisible ? 'rounded-[18px] p-2' : 'rounded-[24px] p-4 pt-2'} ${timerPosition || keyboardTimerVisible ? '' : 'inset-x-0 top-[calc(4.75rem+var(--gym-safe-top))] mx-auto'}`}
           style={timerStyle}
         >
           {!keyboardTimerVisible ? (
